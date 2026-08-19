@@ -17,7 +17,9 @@ services:
     region: frankfurt          # O'zbekistonga eng yaqin tekin mintaqa
     branch: main
 
-    buildCommand: npm ci && npm run build
+    # NODE_ENV=production bo'lgani uchun `npm ci` dev-paketlarni o'tkazib yuboradi,
+    # lekin vite va esbuild aynan o'shalar ichida — shuning uchun --include=dev.
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
 
     healthCheckPath: /api/health
