@@ -217,7 +217,10 @@ async function main(): Promise<void> {
 
     const { db, initDatabase, persist, flush } = await import('../src/server/db');
     await initDatabase();
-    check('seed ma‘lumotlari yuklandi', db.brands.length > 0, `${db.brands.length} brend`);
+    // Namunaviy profillar olib tashlangan — yangi baza bo'sh boshlanadi.
+    check('yangi baza bo‘sh boshlanadi', db.brands.length === 0 && db.bloggers.length === 0,
+      `${db.brands.length} brend, ${db.bloggers.length} bloger`);
+    check('tuzilma to‘liq yaratildi', Array.isArray(db.follows) && Array.isArray(db.adminLog));
 
     let writes = 0;
     const original = fs.writeFileSync;

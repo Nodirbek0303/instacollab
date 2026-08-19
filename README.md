@@ -399,6 +399,14 @@ uzmasligi uchun har 25 soniyada bo'sh signal yuboriladi. Ilova fondan qaytganda
 Namuna uchun `.env.example` ga qarang. Token oshkor bo'lib qolsa, @BotFather'da `/revoke`
 orqali darhol yangilang va `.env` dagi qiymatni almashtiring.
 
+## Namunaviy ma'lumot yo'q
+
+Platforma **bo'sh boshlanadi**. Ilgari kodda namunaviy brendlar va blogerlar bor edi
+(`src/data/seed.ts`) — ular haqiqiy foydalanuvchilar orasida chalkashlik tug'dirgani uchun
+butunlay olib tashlandi. Yangi baza ochilganda hech qanday soxta profil yaratilmaydi.
+
+Shu sababli demo hisoblar (`demo1234`) ham yo'q — kirish uchun oddiy ro'yxatdan o'tiladi.
+
 ## Muhim eslatma
 
 Platformada **to'lov tizimi, escrow yoki kafolat yo'q** — u faqat tomonlarni bog'laydi.

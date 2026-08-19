@@ -206,6 +206,46 @@ async function main(): Promise<void> {
   check('obunachilar to‘g‘ri', bloggerProfile?.followersCount === 25000);
   check('yo‘nalish to‘g‘ri', bloggerProfile?.niche === 'Sport & Fitnes');
 
+  /*
+   * Namunaviy profillar olib tashlangan — baza bo'sh boshlanadi.
+   * Shuning uchun keyingi bosqichlar uchun e'lonni sinov o'zi yaratadi.
+   */
+  const brandAccount = await createAccount({
+    role: 'advertiser',
+    phone: '+998900000777',
+    password: 'sinov_parol_777',
+    profile: {
+      name: 'Sinov Brend',
+      category: 'Sport & Fitnes',
+      contactTelegram: '@sinov_brend',
+      phone: '+998900000777',
+    },
+  });
+
+  db.campaigns = [
+    {
+      id: 'c_sinov_1',
+      brandId: brandAccount.profileId,
+      brandName: 'Sinov Brend',
+      brandLogo: 'https://example.com/logo.png',
+      title: 'Sinov reklama e‘loni',
+      description: 'Bot sinovi uchun yaratilgan e‘lon.',
+      niche: 'Sport & Fitnes',
+      format: 'Reels Integratsiya',
+      deadlineDays: 7,
+      requiredFollowersMin: 1000,
+      targetAudience: 'Barcha faol auditoriya',
+      status: 'active',
+      bidsCount: 0,
+      createdDate: '20-avgust',
+      talkingPoints: [],
+      hashtags: [],
+      contactTelegram: '@sinov_brend',
+      contactInstagram: 'sinov_brend',
+      phone: '+998900000777',
+    },
+  ];
+
   console.log('\n3. Katalog va sahifalash');
   sent.length = 0;
   pushMessage("📢 Reklama e'lonlari");

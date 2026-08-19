@@ -124,7 +124,7 @@ async function main(): Promise<void> {
   check('hozircha webhook rejimida', webhookPath() !== null);
 
   console.log('\n6. Ma‘lumotlar bazasi yuklandi');
-  check('seed ma‘lumotlari bor', db.campaigns.length > 0, `${db.campaigns.length} e'lon`);
+  check('baza tuzilmasi tayyor', Array.isArray(db.campaigns) && Array.isArray(db.accounts));
 
   stopBot();
 

@@ -1,7 +1,18 @@
 import type { PlatformState } from '../types';
 
-const STATE_KEY = 'instacollab:state:v2';
-const TAB_KEY = 'instacollab:tab:v2';
+/**
+ * Kalitdagi versiya raqami keshni bekor qilish uchun.
+ *
+ * Uni oshirsak, brauzerdagi eski nusxa e'tiborsiz qoladi va ilova
+ * ma'lumotni serverdan qaytadan oladi. Namunaviy profillar bazadan
+ * o'chirilgach shu kerak bo'ldi: aks holda ular eski keshdan
+ * ko'rinishda davom etardi.
+ */
+const STATE_KEY = 'instacollab:state:v3';
+const TAB_KEY = 'instacollab:tab:v3';
+
+/** Eskirgan kalitlar — ilova ochilganda tozalanadi. */
+const LEGACY_KEYS = ['instacollab:state:v1', 'instacollab:state:v2', 'instacollab:tab:v1', 'instacollab:tab:v2'];
 
 function read<T>(key: string): T | null {
   try {
@@ -27,6 +38,11 @@ function remove(key: string): void {
   } catch {
     /* e'tiborsiz */
   }
+}
+
+/** Eski versiyalardan qolgan keshni tozalaydi. */
+export function dropLegacyCache(): void {
+  for (const key of LEGACY_KEYS) remove(key);
 }
 
 /**

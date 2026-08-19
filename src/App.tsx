@@ -11,7 +11,7 @@ import type {
 } from './types';
 import { REPORT_REASONS } from './types';
 import { ApiError, api, type AppConfig, type RegisterInput } from './lib/api';
-import { cachedState, savedTab } from './lib/storage';
+import { cachedState, dropLegacyCache, savedTab } from './lib/storage';
 import { getInitData, initTelegram, isTelegramMiniApp } from './lib/telegram';
 import { applyEvent, connectLive } from './lib/live';
 import { AdminPanel } from './components/AdminPanel';
@@ -90,6 +90,12 @@ export default function App() {
 
   const userRole = auth?.account.role ?? 'advertiser';
   const isAdvertiser = userRole === 'advertiser';
+
+  // Eski versiyadan qolgan kesh tozalanadi — u endi mavjud bo'lmagan
+  // profillarni ko'rsatib turishi mumkin edi.
+  useEffect(() => {
+    dropLegacyCache();
+  }, []);
 
   /* ---------------- Sessiyani tekshirish ---------------- */
 

@@ -163,7 +163,6 @@ api.get('/config', readLimit, (_req, res) => {
   res.json({
     telegramBot: botInfo.username ? `@${botInfo.username}` : null,
     telegramBotUrl: botInfo.username ? `https://t.me/${botInfo.username}` : null,
-    demoMode: process.env.NODE_ENV !== 'production',
     liveClients: connectedClients(),
   });
 });

@@ -4,12 +4,10 @@ import './src/server/env';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import path from 'path';
 
-import type { Account } from './src/types';
-import { accountByPhone, db, flush, initDatabase, makeId, persist, storageInfo } from './src/server/db';
-import { hashPassword } from './src/server/auth';
+import { db, flush, initDatabase, persist, storageInfo } from './src/server/db';
 import { api, startCleanupTimer } from './src/server/api';
 import { handleUpdate, startBot, stopBot, webhookPath } from './src/server/bot';
-import { HttpError, normalizePhone } from './src/server/validate';
+import { HttpError } from './src/server/validate';
 import { adminPhones, syncSupportAdmins } from './src/server/admin';
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -19,7 +17,6 @@ const PORT = Number(process.env.PORT) || 3000;
  */
 const HOST = process.env.HOST || '0.0.0.0';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-const DEMO_PASSWORD = 'demo1234';
 
 const app = express();
 app.disable('x-powered-by');
@@ -107,41 +104,6 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* Demo hisoblar (faqat dasturchi rejimida)                            */
-/* ------------------------------------------------------------------ */
-
-/**
- * Dasturchi rejimida seed profillar uchun demo hisoblar ochiladi, shunda
- * ilovani darhol sinab ko'rish mumkin. Ishlab chiqarishda ular yaratilmaydi.
- */
-async function ensureDemoAccounts(): Promise<void> {
-  if (IS_PRODUCTION || db.accounts.length > 0) return;
-
-  const passwordHash = await hashPassword(DEMO_PASSWORD);
-  const accounts: Account[] = [];
-
-  const add = (phoneRaw: string | undefined, role: Account['role'], profileId: string) => {
-    const phone = normalizePhone(phoneRaw);
-    if (!phone || accounts.some((a) => a.phone === phone) || accountByPhone(phone)) return;
-    accounts.push({
-      id: makeId('acc'),
-      phone,
-      passwordHash,
-      role,
-      profileId,
-      createdAt: new Date().toISOString(),
-    });
-  };
-
-  for (const brand of db.brands) add(brand.phone, 'advertiser', brand.id);
-  for (const blogger of db.bloggers) add(blogger.phone, 'blogger', blogger.id);
-
-  db.accounts = accounts;
-  await persist();
-  console.log(`[demo] ${accounts.length} ta demo hisob ochildi. Umumiy parol: ${DEMO_PASSWORD}`);
-}
-
-/* ------------------------------------------------------------------ */
 /* Vite (dev) yoki statik fayllar (prod)                               */
 /* ------------------------------------------------------------------ */
 
@@ -178,8 +140,6 @@ async function startServer() {
   await initDatabase();
   const store = storageInfo();
   console.log(`Ma'lumotlar: ${store.kind} (${store.location})`);
-
-  await ensureDemoAccounts();
 
   /**
    * Admin ro'yxatini `.env` bilan moslaymiz. `ADMIN_PHONES` o'zgartirilsa,

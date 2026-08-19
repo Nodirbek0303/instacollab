@@ -73,7 +73,6 @@ export interface RegisterInput {
 export interface AppConfig {
   telegramBot: string | null;
   telegramBotUrl: string | null;
-  demoMode: boolean;
 }
 
 export const api = {

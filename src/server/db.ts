@@ -1,12 +1,5 @@
 import crypto from 'crypto';
 
-import {
-  SEED_BIDS,
-  SEED_BLOGGERS,
-  SEED_BRANDS,
-  SEED_CAMPAIGNS,
-  SEED_MESSAGES,
-} from '../data/seed';
 import type { Account, BloggerProfile, BrandProfile, DatabaseShape } from '../types';
 import { HttpError } from './validate';
 import { createStorage, type Storage } from './storage';
@@ -34,17 +27,6 @@ function emptyDatabase(): DatabaseShape {
   };
 }
 
-function seededDatabase(): DatabaseShape {
-  return {
-    ...emptyDatabase(),
-    brands: structuredClone(SEED_BRANDS),
-    bloggers: structuredClone(SEED_BLOGGERS),
-    campaigns: structuredClone(SEED_CAMPAIGNS),
-    bids: structuredClone(SEED_BIDS),
-    messages: structuredClone(SEED_MESSAGES),
-  };
-}
-
 /**
  * Butun platforma holati. Bu obyektga havola o'zgarmaydi — `initDatabase()`
  * uning ichini to'ldiradi, shuning uchun boshqa modullar uni bemalol import
@@ -68,7 +50,12 @@ export async function initDatabase(): Promise<void> {
     throw error;
   }
 
-  const source = loaded ?? seededDatabase();
+  /**
+   * Baza bo'sh bo'lsa platforma bo'sh boshlanadi — namunaviy profil
+   * yaratilmaydi. Ilgari bu yerda soxta brendlar va blogerlar bor edi;
+   * ular haqiqiy foydalanuvchilar orasida chalkashlik tug'dirardi.
+   */
+  const source = loaded ?? emptyDatabase();
   const now = Date.now();
 
   Object.assign(db, {
