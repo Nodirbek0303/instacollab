@@ -2,7 +2,8 @@ node_modules/
 build/
 dist/
 coverage/
-data/
+# Faqat ildizdagi ma'lumotlar bazasi — `src/data/` emas!
+/data/
 .DS_Store
 *.log
 .env*
