@@ -1,4 +1,4 @@
-import { Briefcase, ChevronDown, FileText, Menu, Plus } from 'lucide-react';
+import { Briefcase, ChevronDown, FileText, Menu, Plus, ShieldCheck } from 'lucide-react';
 
 import type { BloggerProfile, BrandProfile, UserRole } from '../types';
 
@@ -12,16 +12,22 @@ interface TopHeaderProps {
   onSelectTab: (tab: string) => void;
   /** Jonli oqim ulanganmi. */
   isLive?: boolean;
+  /** Admin huquqi bor foydalanuvchiga qo'shimcha bo'lim ko'rsatiladi. */
+  isAdmin?: boolean;
 }
+
+const ADMIN_TITLE = 'Administrator Paneli';
 
 const TITLES: Record<UserRole, Record<string, string>> = {
   advertiser: {
     campaigns: "Reklama E'lonlarim & Kelgan Arizalar",
     profile: 'Brend Profilim',
+    admin: ADMIN_TITLE,
   },
   blogger: {
     campaigns: "Brendlarning Reklama E'lonlari (Tanlash)",
     profile: 'Mening Profilim & Media Kit',
+    admin: ADMIN_TITLE,
   },
 };
 
@@ -34,6 +40,7 @@ export function TopHeader({
   profile,
   onSelectTab,
   isLive = false,
+  isAdmin = false,
 }: TopHeaderProps) {
   const isAdvertiser = userRole === 'advertiser';
   const title = TITLES[userRole][activeTab] ?? (isAdvertiser ? 'Reklama Beruvchi Kabineti' : 'Bloger Kabineti');
@@ -55,6 +62,8 @@ export function TopHeader({
         { id: 'campaigns', label: 'Reklamalar Bozori', Icon: Briefcase },
         { id: 'profile', label: 'Media Kit', Icon: FileText },
       ];
+
+  if (isAdmin) tabs.push({ id: 'admin', label: 'Admin', Icon: ShieldCheck });
 
   return (
     <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-purple-100/90 shadow-xs shadow-purple-950/5">

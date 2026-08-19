@@ -13,6 +13,8 @@ import {
   Search,
   Send,
   Send as TelegramIcon,
+  Flag,
+  ShieldAlert,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -33,6 +35,8 @@ interface CampaignMarketplaceProps {
   userRole: UserRole;
   existingBids: ProposalBid[];
   onApplyBid: (input: Record<string, unknown>) => Promise<void>;
+  /** Yolg'on e'lon haqida xabar berish. */
+  onReportCampaign: (campaign: Campaign) => void;
   onOpenCreateCampaign: () => void;
   onAcceptBid: (bid: ProposalBid) => void;
   onDeleteCampaign: (campaignId: string) => void;
@@ -53,6 +57,7 @@ export function CampaignMarketplace({
   userRole,
   existingBids,
   onApplyBid,
+  onReportCampaign,
   onOpenCreateCampaign,
   onAcceptBid,
   onDeleteCampaign,
@@ -820,6 +825,19 @@ export function CampaignMarketplace({
                         </p>
                       )}
 
+                      {/* Admin e'lonni yashirgan bo'lsa — egasi sababini ko'radi. */}
+                      {campaign.moderation && campaign.moderation.state !== 'ok' && (
+                        <p className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2 mb-3 flex items-start gap-1.5">
+                          <ShieldAlert className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-px" aria-hidden="true" />
+                          <span>
+                            {campaign.moderation.state === 'hidden'
+                              ? "Bu e'lon administrator tomonidan yashirilgan — bozorda ko'rinmayapti."
+                              : "Bu e'lon administrator tomonidan o'chirilgan."}
+                            {campaign.moderation.reason ? ` Sabab: ${campaign.moderation.reason}` : ''}
+                          </span>
+                        </p>
+                      )}
+
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <button
                           type="button"
@@ -831,6 +849,19 @@ export function CampaignMarketplace({
                           <MessageSquare className="w-3.5 h-3.5 text-purple-600" aria-hidden="true" />
                           <span>Chat orqali yozish</span>
                         </button>
+
+                        {!isOwner && (
+                          <button
+                            type="button"
+                            id={`btn-report-campaign-${campaign.id}`}
+                            onClick={() => onReportCampaign(campaign)}
+                            className="px-3 py-2 bg-white border border-rose-200 hover:bg-rose-50 text-rose-800 text-xs font-bold rounded-2xl transition flex items-center gap-1.5 cursor-pointer"
+                            title="Yolg'on yoki shubhali e'lon haqida xabar berish"
+                          >
+                            <Flag className="w-3.5 h-3.5 text-rose-500" aria-hidden="true" />
+                            <span className="hidden sm:inline">Shikoyat</span>
+                          </button>
+                        )}
 
                         {!isAdvertiser &&
                           (hasApplied ? (

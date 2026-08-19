@@ -126,6 +126,8 @@ export interface Campaign {
     dos: string[];
     donts: string[];
   };
+  /** Admin qarori. Yo'q bo'lsa — tekshiruvdan o'tmagan, lekin ko'rinadi. */
+  moderation?: Moderation;
 }
 
 export interface ProposalBid {
@@ -182,6 +184,39 @@ export interface Account {
   /** Telegram bot orqali ulangan bo'lsa — foydalanuvchining Telegram id'si. */
   telegramId?: number;
   telegramUsername?: string;
+  /**
+   * Admin qo'ygan holat. Yo'q bo'lsa — `active` deb hisoblanadi (eski yozuvlar
+   * uchun).
+   *
+   *  • `frozen`  — vaqtincha to'xtatilgan: kira olmaydi, lekin hammasi joyida
+   *                turadi va istalgan payt qaytariladi;
+   *  • `deleted` — o'chirilgan: e'lonlari va profili hech kimga ko'rinmaydi.
+   *                Ma'lumot bazadan yo'qolmaydi, shuning uchun qayta tiklash
+   *                mumkin. Butunlay yo'q qilish alohida amal.
+   */
+  status?: AccountStatus;
+  statusReason?: string;
+  statusAt?: string;
+  /** Holatni o'zgartirgan admin hisobining id'si. */
+  statusBy?: string;
+}
+
+export type AccountStatus = 'active' | 'frozen' | 'deleted';
+
+/**
+ * E'lonning moderatsiya holati. Bu `Campaign.status` dan boshqa narsa:
+ * `status` — brendning o'z holati (faol, tugagan…), `moderation` esa
+ * adminning qarori.
+ */
+export type ModerationState = 'ok' | 'hidden' | 'deleted';
+
+export interface Moderation {
+  state: ModerationState;
+  /** Nima uchun yashirildi yoki o'chirildi — foydalanuvchiga ham ko'rsatiladi. */
+  reason?: string;
+  at?: string;
+  /** Qaror qabul qilgan admin hisobining id'si. */
+  by?: string;
 }
 
 export interface SessionRecord {
@@ -242,6 +277,58 @@ export interface BotSession {
   updatedAt: string;
 }
 
+/**
+ * E'lon ustidan shikoyat. Yolg'on e'lonni admin o'zi qidirib yurmasligi uchun
+ * blogerlar «Shikoyat qilish» tugmasi orqali belgilab qo'yadi.
+ */
+export interface CampaignReport {
+  id: string;
+  campaignId: string;
+  campaignTitle: string;
+  /** Shikoyat qilgan profil (bloger yoki brend). */
+  reporterId: string;
+  reporterName: string;
+  reason: ReportReason;
+  comment?: string;
+  createdAt: string;
+  /** Admin ko'rib chiqqan bo'lsa. */
+  resolvedAt?: string;
+  resolvedBy?: string;
+  /** Admin nima qilgani: e'lon o'chirildimi yoki shikoyat asossiz topildimi. */
+  outcome?: 'removed' | 'rejected';
+}
+
+export const REPORT_REASONS = [
+  'Yolg\'on ma\'lumot',
+  'Aloqa ma\'lumotlari ishlamaydi',
+  'Firibgarlik / oldindan pul so\'rayapti',
+  'Nomaqbul mazmun',
+  'Takroriy e\'lon',
+  'Boshqa sabab',
+] as const;
+
+export type ReportReason = (typeof REPORT_REASONS)[number];
+
+/**
+ * Adminning har bir amali yozib boriladi — kim, nima qildi, qachon va nega.
+ * Bu «to'liq kuzatuv»ning asosi: keyinchalik «bu hisobni kim muzlatgan?»
+ * degan savolga javob beradi.
+ */
+export interface AdminAction {
+  id: string;
+  /** Amalni bajargan admin hisobi. */
+  adminId: string;
+  adminName: string;
+  action: string;
+  /** Nimaga nisbatan: hisob, e'lon yoki shikoyat id'si. */
+  targetType: 'account' | 'campaign' | 'report';
+  targetId: string;
+  /** Inson o'qiy oladigan qisqa izoh. */
+  targetLabel: string;
+  reason?: string;
+  createdAt: string;
+}
+
 /** Serverdagi `data/db.json` faylining to'liq tuzilishi. */
 export interface DatabaseShape extends PlatformState {
   accounts: Account[];
@@ -250,6 +337,8 @@ export interface DatabaseShape extends PlatformState {
   supportAdmins: number[];
   tickets: SupportTicket[];
   botSessions: BotSession[];
+  reports: CampaignReport[];
+  adminLog: AdminAction[];
 }
 
 /** Ikki tomon o'rtasidagi suhbat kalitini bir xil tarzda hosil qiladi. */

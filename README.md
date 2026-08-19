@@ -177,6 +177,7 @@ npm run test:storage     # saqlash qatlami: Postgres va fayl (25 ta tekshiruv)
 npm run test:webhook     # webhook manzili va imzosi (11 ta tekshiruv)
 npm run test:bot         # Telegram bot mantiqi (54 ta tekshiruv)
 npm run test:visibility  # kim kimni ko'radi (24 ta tekshiruv, `npm run build` talab qiladi)
+npm run test:admin       # admin paneli va moderatsiya (46 ta tekshiruv)
 npm run build         # frontend + server bundle -> dist/
 npm start             # tayyor bundle'ni ishga tushirish
 ```
@@ -203,6 +204,14 @@ npm start             # tayyor bundle'ni ishga tushirish
 | `POST` | `/api/images` | sessiya | Profil rasmini yuklash (JPG/PNG/WEBP) |
 | `GET` | `/api/images/:id` | — | Rasmni berish (abadiy keshlanadi) |
 | `POST` | `/api/messages` | sessiya | Chat xabari |
+| `GET` | `/api/events` | sessiya | Jonli yangilanishlar oqimi (SSE) |
+| `POST` | `/api/reports` | sessiya | E'lon ustidan shikoyat |
+| `GET` | `/api/admin/me` | sessiya | Admin huquqi bormi |
+| `GET` | `/api/admin/overview` | **admin** | To'liq manzara: hisoblar, e'lonlar, shikoyatlar, jurnal |
+| `PATCH` | `/api/admin/accounts/:id` | **admin** | Muzlatish / o'chirish / qayta tiklash |
+| `POST` | `/api/admin/accounts/:id/reset-password` | **admin** | Parolni tiklash |
+| `PATCH` | `/api/admin/campaigns/:id` | **admin** | E'lonni yashirish / o'chirish / qaytarish |
+| `PATCH` | `/api/admin/reports/:id` | **admin** | Shikoyatni yopish |
 
 Barcha yozuv so'rovlari validatsiyadan o'tadi, uzunligi cheklanadi va IP bo'yicha rate-limit qo'llanadi
 (kirish/ro'yxat uchun alohida, qattiqroq chegara).
@@ -223,6 +232,58 @@ o'zgarmas bo'lgani uchun brauzer uni bir yil keshlaydi.
 
 Server tekshiruvlari: tur (faqat JPG/PNG/WEBP), hajm (3 MB gacha) va **sarlavha baytlari** —
 ya'ni `.png` deb nomlangan matn fayli o'tib ketmaydi.
+
+## Administrator paneli
+
+Admin hisobiga kirganda yon menyuda **«Administrator Paneli»** bo'limi paydo bo'ladi. U yerda
+platformaning to'liq manzarasi va nazorat vositalari bor.
+
+### Kim admin bo'ladi
+
+Ikki yo'l bor va ikkalasi ham ishlaydi:
+
+1. **Bot orqali** — `.env` dagi `ADMIN_SETUP_CODE` bilan botga `/admin KOD` deb yoziladi.
+   Shu Telegram hisobiga ulangan akkaunt veb-panelda ham admin bo'ladi.
+2. **`.env` orqali** — `ADMIN_PHONES=+998901234567,+998907654321`. Telegram ulanmagan bo'lsa
+   ham egasi panelga kira oladi. Bu zaxira yo'l: bot ishlamay qolsa nazorat yopilib qolmaydi.
+
+### Nima qila oladi
+
+| Amal | Nima bo'ladi |
+| --- | --- |
+| **Hisobni muzlatish** | Tizimga kira olmaydi, ochiq sessiyalari bekor qilinadi, e'lonlari bozordan yo'qoladi |
+| **Muzlatishni bekor qilish** | Hammasi joyiga qaytadi |
+| **Hisobni o'chirish** | Profili va e'lonlari hech kimga ko'rinmaydi |
+| **Qayta tiklash** | To'liq ishchi holatga qaytaradi |
+| **E'lonni yashirish** | Bozordan olinadi, lekin egasi uni sabab bilan ko'rib turadi va tuzatishi mumkin |
+| **E'lonni o'chirish** | Butunlay olib qo'yiladi (baribir qaytarish mumkin) |
+| **Parolni tiklash** | Yangi vaqtinchalik parol beriladi, sessiyalar bekor qilinadi, parol botga yuboriladi |
+
+**Hech narsa bazadan o'chirilmaydi** — faqat belgilanadi. Shuning uchun har qanday qaror
+qaytariladi va xato tuzatiladi.
+
+### Yolg'on e'lonlarni topish
+
+Admin har bir e'lonni o'qib chiqmasligi uchun foydalanuvchilar shubhali e'lonni **«Shikoyat»**
+tugmasi bilan belgilaydi. Shikoyat botdagi barcha adminlarga xabar sifatida boradi va panelning
+«Shikoyatlar» bo'limida ochiq turadi. Bir foydalanuvchi bitta e'longa faqat bir marta shikoyat
+qila oladi, o'z e'loniga esa umuman qila olmaydi.
+
+Shikoyatni ko'rib chiqqach ikki tugma bor: **«E'lonni o'chirish»** (shikoyat tasdiqlanadi) yoki
+**«Asossiz»**.
+
+### Kuzatuv jurnali
+
+Adminning har bir amali yozib boriladi: kim, nimaga, qachon va nega. Oxirgi 500 ta yozuv
+saqlanadi va panelning «Kuzatuv» bo'limida ko'rinadi. Sabab foydalanuvchining o'ziga ham
+ko'rsatiladi — hisobi muzlatilsa, kirishda aynan shu matnni o'qiydi.
+
+### Xavfsizlik
+
+- Har bir admin marshruti `requireAdmin` bilan yopilgan — interfeysdagi tugmani yashirish
+  yetarli emas, cheklov serverda;
+- admin **o'z hisobini** bloklay olmaydi (o'zini qulflab qo'yish holatining oldini oladi);
+- bir admin **boshqa adminni** bloklay olmaydi.
 
 ## Real vaqtda yangilanish
 
@@ -248,6 +309,7 @@ uzmasligi uchun har 25 soniyada bo'sh signal yuboriladi. Ilova fondan qaytganda
 | `APP_URL` | Ilova manzili. `https://` bo'lsa Telegram Mini App yoqiladi |
 | `PORT` | Server porti (standart 3000) |
 | `DATA_DIR` | Ma'lumotlar katalogi (fayl rejimida) |
+| `ADMIN_PHONES` | Vergul bilan ajratilgan telefon raqamlari — shu hisoblar admin bo'ladi |
 | `DATABASE_URL` | Postgres manzili. Berilsa — ma'lumotlar shu yerda saqlanadi |
 | `BOT_MODE` | `polling` deb yozilsa, HTTPS bo'lsa ham long polling ishlatiladi |
 | `HOST` | Ilova qaysi manzilda tinglaydi (proksi ortida `127.0.0.1`) |

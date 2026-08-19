@@ -93,6 +93,8 @@ function sampleDb(): DatabaseShape {
     supportAdmins: [999],
     tickets: [],
     botSessions: [],
+    reports: [],
+    adminLog: [],
   };
 }
 

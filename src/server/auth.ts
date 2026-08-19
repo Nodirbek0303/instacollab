@@ -5,6 +5,7 @@ import type { Request, Response } from 'express';
 import type { Account, BloggerProfile, BrandProfile, SessionRecord, UserRole } from '../types';
 import { TIERS } from '../types';
 import { db, makeId, persist, profileOf } from './db';
+import { blockedReason, isAccountActive } from './status';
 import { HttpError, handle, num, oneOf, str, strList } from './validate';
 
 const SESSION_COOKIE = 'instacollab_session';
@@ -116,6 +117,8 @@ export function currentAccount(req: Request): Account | null {
 export function requireAccount(req: Request): Account {
   const account = currentAccount(req);
   if (!account) throw new HttpError(401, 'Bu amal uchun tizimga kiring');
+  // Muzlatilgan yoki o'chirilgan hisob — sessiyasi tirik bo'lsa ham o'tkazilmaydi.
+  if (!isAccountActive(account)) throw new HttpError(403, blockedReason(account));
   return account;
 }
 

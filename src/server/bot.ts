@@ -15,11 +15,14 @@ import crypto from 'crypto';
 
 import type {
   Account,
+  AccountStatus,
   BloggerProfile,
   BotSession,
   BrandProfile,
   Campaign,
+  CampaignReport,
   ChatMessage,
+  ModerationState,
   ProposalBid,
   SupportTicket,
   UserRole,
@@ -1538,6 +1541,73 @@ export const notify = {
         ['🆕 <b>Sizning yo‘nalishingizda yangi e‘lon!</b>', '', campaignCard(campaign)].join('\n'),
       );
     }
+  },
+
+  /** Yangi shikoyat — barcha support adminlariga. */
+  async newReport(report: CampaignReport): Promise<void> {
+    if (!botInfo.enabled) return;
+
+    const text = [
+      '🚩 <b>E‘lon ustidan shikoyat</b>',
+      '',
+      `📢 ${esc(report.campaignTitle)}`,
+      `👤 ${esc(report.reporterName)}`,
+      `❗ ${esc(report.reason)}`,
+      report.comment ? `💬 ${esc(report.comment).slice(0, 400)}` : '',
+      '',
+      'Admin panelida ko‘rib chiqing.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    for (const telegramId of db.supportAdmins) await send(telegramId, text);
+  },
+
+  /**
+   * Hisob holati o'zgardi — egasiga xabar beramiz.
+   *
+   * Odam nima bo'lganini bilmay qolmasligi kerak: kirolmay qolsa, sababini
+   * shu xabardan biladi.
+   */
+  async accountStatusChanged(account: Account, status: AccountStatus, reason?: string): Promise<void> {
+    const because = reason ? `\n\n<b>Sabab:</b> ${esc(reason)}` : '';
+
+    const text =
+      status === 'frozen'
+        ? `⛔️ <b>Hisobingiz vaqtincha to‘xtatildi.</b>${because}\n\nTiklash uchun «🆘 Yordam» tugmasi orqali murojaat qiling.`
+        : status === 'deleted'
+          ? `🗑 <b>Hisobingiz o‘chirildi.</b>${because}\n\nSavollaringiz bo‘lsa «🆘 Yordam» tugmasi orqali yozing.`
+          : '✅ <b>Hisobingiz qayta tiklandi.</b> Endi tizimga kirishingiz mumkin.';
+
+    await sendToAccount(account, text);
+  },
+
+  /** E'lon yashirildi yoki qaytarildi — e'lon egasiga. */
+  async campaignModerated(campaign: Campaign, state: ModerationState, reason?: string): Promise<void> {
+    const because = reason ? `\n\n<b>Sabab:</b> ${esc(reason)}` : '';
+
+    const text =
+      state === 'ok'
+        ? `✅ <b>E‘loningiz qaytarildi:</b> ${esc(campaign.title)}`
+        : state === 'hidden'
+          ? `⚠️ <b>E‘loningiz vaqtincha yashirildi:</b> ${esc(campaign.title)}${because}`
+          : `🗑 <b>E‘loningiz o‘chirildi:</b> ${esc(campaign.title)}${because}`;
+
+    await sendToAccount(accountByProfileId(campaign.brandId), text);
+  },
+
+  /** Admin parolni tikladi — yangi vaqtinchalik parolni egasiga yuboramiz. */
+  async passwordReset(account: Account, temporary: string): Promise<void> {
+    await sendToAccount(
+      account,
+      [
+        '🔑 <b>Parolingiz tiklandi</b>',
+        '',
+        `Yangi vaqtinchalik parol: <code>${esc(temporary)}</code>`,
+        '',
+        'Kirganingizdan keyin uni «Hisobim» bo‘limida o‘zgartiring.',
+      ].join('\n'),
+    );
   },
 };
 

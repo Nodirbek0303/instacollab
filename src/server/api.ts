@@ -1,7 +1,15 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 
-import type { Account, BloggerProfile, BrandProfile, Campaign, ChatMessage, ProposalBid } from '../types';
-import { CAMPAIGN_FORMATS, buildThreadId } from '../types';
+import type {
+  Account,
+  BloggerProfile,
+  BrandProfile,
+  Campaign,
+  CampaignReport,
+  ChatMessage,
+  ProposalBid,
+} from '../types';
+import { CAMPAIGN_FORMATS, REPORT_REASONS, buildThreadId } from '../types';
 import {
   accountByPhone,
   accountByProfileId,
@@ -25,11 +33,15 @@ import {
   createAccount,
   assertPasswordStrength,
   hashPassword,
+  generateTempPassword,
+  revokeAllSessions,
 } from './auth';
 import { HttpError, handle, normalizePhone, num, oneOf, str, strList } from './validate';
 import { notify, botInfo } from './bot';
 import { verifyInitData } from './miniapp';
 import { addClient, broadcast, connectedClients, startHeartbeat } from './events';
+import { isAdminAccount, logAction, requireAdmin } from './admin';
+import { blockedReason, canSeeCampaign, isAccountActive, moderationState } from './status';
 import {
   MAX_IMAGE_BYTES,
   imageId,
@@ -229,6 +241,9 @@ api.post(
     // Raqam ro'yxatda bor-yo'qligini oshkor qilmaslik uchun ikkala holatda bir xil xabar.
     const ok = account ? await verifyPassword(password, account.passwordHash) : false;
     if (!account || !ok) throw new HttpError(401, "Telefon raqami yoki parol noto'g'ri");
+    // Parol to'g'ri bo'lsa ham muzlatilgan hisobga kirib bo'lmaydi. Sabab
+    // aytiladi, aks holda odam nima bo'lganini tushunmay qoladi.
+    if (!isAccountActive(account)) throw new HttpError(403, blockedReason(account));
 
     await startSession(req, res, account.id);
     res.json(authPayload(account));
@@ -261,6 +276,8 @@ api.post(
       });
       return;
     }
+
+    if (!isAccountActive(account)) throw new HttpError(403, blockedReason(account));
 
     // Telegram username o'zgargan bo'lsa yangilaymiz.
     if (account.telegramUsername !== telegramUser.username) {
@@ -367,7 +384,10 @@ function bloggerAudience(bloggerId: string): string[] {
  * bloger e'lonni ko'rib o'zi bog'lanadi.
  */
 function visibleState(account: Account) {
-  const shared = { brands: db.brands, campaigns: db.campaigns };
+  // Admin yashirgan e'lonlar va bloklangan hisoblarning e'lonlari chiqib
+  // ketadi. E'lon egasi o'zinikini baribir ko'radi — sababi bilan birga.
+  const campaigns = db.campaigns.filter((c) => canSeeCampaign(c, account.profileId));
+  const shared = { brands: db.brands, campaigns };
 
   if (account.role === 'blogger') {
     return {
@@ -672,5 +692,346 @@ api.post(
     if (recipient) void notify.newMessage(message, recipient);
 
     res.status(201).json(message);
+  }),
+);
+
+/* ------------------------------------------------------------------ */
+/* Shikoyatlar — yolg'on e'lonni foydalanuvchi belgilaydi              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * E'lon ustidan shikoyat. Admin har bir e'lonni o'qib chiqmasligi uchun
+ * shubhali e'lonni foydalanuvchining o'zi belgilab qo'yadi.
+ *
+ * Bir foydalanuvchi bitta e'longa faqat bir marta shikoyat qila oladi —
+ * aks holda ro'yxatni takroriy yozuvlar bilan to'ldirib yuborish mumkin edi.
+ */
+api.post(
+  '/reports',
+  writeLimit,
+  asyncRoute(async (req, res) => {
+    const account = requireAccount(req);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+
+    const campaign = db.campaigns.find((c) => c.id === str(body.campaignId, 'E‘lon', { max: 120, required: true }));
+    if (!campaign) throw new HttpError(404, "Bunday e'lon topilmadi");
+    if (campaign.brandId === account.profileId) {
+      throw new HttpError(400, "O'z e'loningiz ustidan shikoyat qila olmaysiz");
+    }
+
+    const already = db.reports.find(
+      (r) => r.campaignId === campaign.id && r.reporterId === account.profileId,
+    );
+    if (already) throw new HttpError(409, "Siz bu e'lon ustidan allaqachon shikoyat qilgansiz");
+
+    const profile = profileOf(account);
+    const report: CampaignReport = {
+      id: makeId('rep'),
+      campaignId: campaign.id,
+      campaignTitle: campaign.title,
+      reporterId: account.profileId,
+      reporterName: profile.name,
+      reason: oneOf(body.reason, REPORT_REASONS, REPORT_REASONS[0]),
+      comment: str(body.comment, 'Izoh', { max: 1000 }) || undefined,
+      createdAt: new Date().toISOString(),
+    };
+
+    db.reports = [report, ...db.reports].slice(0, 2000);
+    await persist();
+
+    void notify.newReport(report);
+    res.status(201).json(report);
+  }),
+);
+
+/* ------------------------------------------------------------------ */
+/* Admin paneli                                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Adminga ko'rinadigan to'liq manzara.
+ *
+ * Oddiy `/state` dan farqi: bu yerda hech narsa yashirilmaydi — bloklangan
+ * hisoblar, yashirilgan e'lonlar, hamma arizalar va shikoyatlar ko'rinadi.
+ * Aynan shuning uchun marshrut `requireAdmin` bilan qattiq yopilgan.
+ */
+api.get(
+  '/admin/overview',
+  readLimit,
+  asyncRoute(async (req, res) => {
+    requireAdmin(req);
+
+    const accounts = db.accounts.map((account) => {
+      let profile: { name: string; avatar: string } | null = null;
+      try {
+        const found = profileOf(account);
+        profile = {
+          name: found.name,
+          avatar: 'logo' in found ? found.logo : found.avatar,
+        };
+      } catch {
+        profile = null;
+      }
+
+      return {
+        id: account.id,
+        phone: account.phone,
+        role: account.role,
+        profileId: account.profileId,
+        profileName: profile?.name ?? '(profil topilmadi)',
+        profileAvatar: profile?.avatar ?? '',
+        createdAt: account.createdAt,
+        telegramId: account.telegramId ?? null,
+        telegramUsername: account.telegramUsername ?? null,
+        status: account.status ?? 'active',
+        statusReason: account.statusReason ?? null,
+        statusAt: account.statusAt ?? null,
+        isAdmin: isAdminAccount(account),
+        campaignsCount: db.campaigns.filter((c) => c.brandId === account.profileId).length,
+        bidsCount: db.bids.filter((b) => b.bloggerId === account.profileId).length,
+      };
+    });
+
+    const campaigns = db.campaigns.map((campaign) => ({
+      ...campaign,
+      moderationState: moderationState(campaign),
+      reportsCount: db.reports.filter((r) => r.campaignId === campaign.id && !r.resolvedAt).length,
+      ownerStatus: db.accounts.find((a) => a.profileId === campaign.brandId)?.status ?? 'active',
+    }));
+
+    res.json({
+      stats: {
+        accounts: db.accounts.length,
+        frozen: db.accounts.filter((a) => (a.status ?? 'active') === 'frozen').length,
+        deleted: db.accounts.filter((a) => a.status === 'deleted').length,
+        brands: db.brands.length,
+        bloggers: db.bloggers.length,
+        campaigns: db.campaigns.length,
+        hiddenCampaigns: db.campaigns.filter((c) => moderationState(c) !== 'ok').length,
+        bids: db.bids.length,
+        messages: db.messages.length,
+        openReports: db.reports.filter((r) => !r.resolvedAt).length,
+        openTickets: db.tickets.filter((t) => t.status === 'open').length,
+        liveClients: connectedClients(),
+      },
+      accounts,
+      campaigns,
+      reports: db.reports,
+      log: db.adminLog,
+    });
+  }),
+);
+
+/** Adminning o'ziga xabar: panel ko'rsatilsinmi. */
+api.get(
+  '/admin/me',
+  readLimit,
+  asyncRoute(async (req, res) => {
+    const account = requireAccount(req);
+    res.json({ isAdmin: isAdminAccount(account) });
+  }),
+);
+
+const ACCOUNT_ACTIONS = ['freeze', 'unfreeze', 'delete', 'restore'] as const;
+
+/**
+ * Hisob holatini o'zgartirish.
+ *
+ * Hech qanday ma'lumot o'chirilmaydi — faqat belgilanadi, shuning uchun
+ * «qayta tiklash» har doim ishlaydi. Muzlatilgan hisobning sessiyalari
+ * bekor qilinadi, aks holda ochiq turgan brauzer ishlayveradi.
+ */
+api.patch(
+  '/admin/accounts/:id',
+  writeLimit,
+  asyncRoute(async (req, res) => {
+    const admin = requireAdmin(req);
+    const target = db.accounts.find((a) => a.id === req.params.id);
+    if (!target) throw new HttpError(404, 'Bunday hisob topilmadi');
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const action = oneOf(body.action, ACCOUNT_ACTIONS, 'freeze');
+    const reason = str(body.reason, 'Sabab', { max: 500 });
+
+    if (target.id === admin.id && action !== 'unfreeze' && action !== 'restore') {
+      throw new HttpError(400, "O'z hisobingizni bloklay olmaysiz");
+    }
+    if (isAdminAccount(target) && target.id !== admin.id && (action === 'freeze' || action === 'delete')) {
+      throw new HttpError(403, 'Boshqa administrator hisobini bloklab bo‘lmaydi');
+    }
+
+    const nextStatus =
+      action === 'freeze' ? 'frozen' : action === 'delete' ? 'deleted' : 'active';
+
+    target.status = nextStatus;
+    target.statusReason = nextStatus === 'active' ? undefined : reason || undefined;
+    target.statusAt = new Date().toISOString();
+    target.statusBy = admin.id;
+    db.accounts = db.accounts.map((a) => (a.id === target.id ? target : a));
+
+    // Bloklangan hisob ochiq turgan brauzerda ishlayvermasligi uchun.
+    if (nextStatus !== 'active') revokeAllSessions(target.id);
+
+    let label = target.phone;
+    try {
+      label = `${profileOf(target).name} (${target.phone})`;
+    } catch {
+      // profil topilmasa telefon yetarli
+    }
+
+    const entry = logAction({
+      admin,
+      action:
+        action === 'freeze'
+          ? 'Hisob muzlatildi'
+          : action === 'delete'
+            ? "Hisob o'chirildi"
+            : action === 'unfreeze'
+              ? 'Muzlatish bekor qilindi'
+              : 'Hisob qayta tiklandi',
+      targetType: 'account',
+      targetId: target.id,
+      targetLabel: label,
+      reason: reason || undefined,
+    });
+
+    await persist();
+
+    // Egasi o'zgarishdan xabardor bo'lsin.
+    void notify.accountStatusChanged(target, nextStatus, reason);
+
+    // Hisob bloklansa e'lonlari bozordan yo'qoladi (yoki qaytadi) —
+    // hamma ochiq turgan sahifa buni darhol ko'rishi kerak.
+    for (const campaign of db.campaigns.filter((c) => c.brandId === target.profileId)) {
+      broadcast(
+        nextStatus === 'active'
+          ? { type: 'campaign:new', campaign }
+          : { type: 'campaign:deleted', campaignId: campaign.id },
+      );
+    }
+
+    res.json({ ok: true, status: nextStatus, log: entry });
+  }),
+);
+
+const CAMPAIGN_ACTIONS = ['hide', 'show', 'delete', 'restore'] as const;
+
+/**
+ * E'lonni yashirish / o'chirish / qaytarish.
+ *
+ * Yolg'on e'lon topilganda `hide` yoki `delete` qilinadi. Ikkalasi ham
+ * qaytariladigan: yozuv bazada qoladi, faqat belgisi o'zgaradi.
+ */
+api.patch(
+  '/admin/campaigns/:id',
+  writeLimit,
+  asyncRoute(async (req, res) => {
+    const admin = requireAdmin(req);
+    const campaign = db.campaigns.find((c) => c.id === req.params.id);
+    if (!campaign) throw new HttpError(404, "Bunday e'lon topilmadi");
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const action = oneOf(body.action, CAMPAIGN_ACTIONS, 'hide');
+    const reason = str(body.reason, 'Sabab', { max: 500 });
+
+    const nextState = action === 'hide' ? 'hidden' : action === 'delete' ? 'deleted' : 'ok';
+
+    campaign.moderation = {
+      state: nextState,
+      reason: nextState === 'ok' ? undefined : reason || undefined,
+      at: new Date().toISOString(),
+      by: admin.id,
+    };
+    db.campaigns = db.campaigns.map((c) => (c.id === campaign.id ? campaign : c));
+
+    const entry = logAction({
+      admin,
+      action:
+        action === 'hide'
+          ? "E'lon yashirildi"
+          : action === 'delete'
+            ? "E'lon o'chirildi"
+            : "E'lon qaytarildi",
+      targetType: 'campaign',
+      targetId: campaign.id,
+      targetLabel: `${campaign.title} — ${campaign.brandName}`,
+      reason: reason || undefined,
+    });
+
+    await persist();
+
+    void notify.campaignModerated(campaign, nextState, reason);
+
+    broadcast(
+      nextState === 'ok'
+        ? { type: 'campaign:new', campaign }
+        : { type: 'campaign:deleted', campaignId: campaign.id },
+    );
+
+    res.json({ ok: true, state: nextState, log: entry });
+  }),
+);
+
+/** Shikoyatni yopish: e'lon o'chirildi yoki shikoyat asossiz topildi. */
+api.patch(
+  '/admin/reports/:id',
+  writeLimit,
+  asyncRoute(async (req, res) => {
+    const admin = requireAdmin(req);
+    const report = db.reports.find((r) => r.id === req.params.id);
+    if (!report) throw new HttpError(404, 'Bunday shikoyat topilmadi');
+
+    const outcome = oneOf((req.body ?? {}).outcome, ['removed', 'rejected'] as const, 'rejected');
+
+    report.resolvedAt = new Date().toISOString();
+    report.resolvedBy = admin.id;
+    report.outcome = outcome;
+    db.reports = db.reports.map((r) => (r.id === report.id ? report : r));
+
+    logAction({
+      admin,
+      action: outcome === 'removed' ? 'Shikoyat tasdiqlandi' : 'Shikoyat asossiz topildi',
+      targetType: 'report',
+      targetId: report.id,
+      targetLabel: report.campaignTitle,
+    });
+
+    await persist();
+    res.json({ ok: true });
+  }),
+);
+
+/**
+ * Foydalanuvchining parolini tiklash.
+ *
+ * Yangi vaqtinchalik parol qaytariladi va barcha sessiyalar bekor qilinadi.
+ * Admin uni foydalanuvchiga yetkazadi; hisob Telegramga ulangan bo'lsa
+ * parol botga ham yuboriladi.
+ */
+api.post(
+  '/admin/accounts/:id/reset-password',
+  writeLimit,
+  asyncRoute(async (req, res) => {
+    const admin = requireAdmin(req);
+    const target = db.accounts.find((a) => a.id === req.params.id);
+    if (!target) throw new HttpError(404, 'Bunday hisob topilmadi');
+
+    const temporary = generateTempPassword();
+    target.passwordHash = await hashPassword(temporary);
+    db.accounts = db.accounts.map((a) => (a.id === target.id ? target : a));
+    revokeAllSessions(target.id);
+
+    logAction({
+      admin,
+      action: 'Parol tiklandi',
+      targetType: 'account',
+      targetId: target.id,
+      targetLabel: target.phone,
+    });
+
+    await persist();
+    void notify.passwordReset(target, temporary);
+
+    res.json({ ok: true, password: temporary });
   }),
 );

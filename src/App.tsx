@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Flag, Loader2, X } from 'lucide-react';
 
 import type {
   AuthPayload,
   BloggerProfile,
   BrandProfile,
+  Campaign,
   PlatformState,
   ProposalBid,
 } from './types';
+import { REPORT_REASONS } from './types';
 import { ApiError, api, type AppConfig, type RegisterInput } from './lib/api';
 import { cachedState, savedTab } from './lib/storage';
 import { getInitData, initTelegram, isTelegramMiniApp } from './lib/telegram';
 import { applyEvent, connectLive } from './lib/live';
+import { AdminPanel } from './components/AdminPanel';
+import { Modal } from './components/Modal';
 
 import { AuthScreen } from './components/AuthScreen';
 import { Sidebar } from './components/Sidebar';
@@ -56,6 +60,13 @@ export default function App() {
   const [highlightCampaignId, setHighlightCampaignId] = useState<string | null>(null);
   /** Jonli oqim ulanganmi — sarlavhadagi kichik belgi shuni ko'rsatadi. */
   const [isLive, setIsLive] = useState(false);
+  /** Hisob admin huquqiga egami — panel shu asosda ko'rsatiladi. */
+  const [isAdmin, setIsAdmin] = useState(false);
+  /** Shikoyat qilinayotgan e'lon. */
+  const [reportTarget, setReportTarget] = useState<Campaign | null>(null);
+  const [reportReason, setReportReason] = useState<string>(REPORT_REASONS[0]);
+  const [reportComment, setReportComment] = useState('');
+  const [reportBusy, setReportBusy] = useState(false);
 
   /* ---------------- Ma'lumotlar ---------------- */
 
@@ -177,9 +188,9 @@ export default function App() {
     if (!auth) return;
     const saved = savedTab.load();
     // Blogerlar katalogi yopiq — ikkala rol uchun ham faqat ikki bo'lim qoldi.
-    const allowed = ['campaigns', 'profile'];
+    const allowed = ['campaigns', 'profile', ...(isAdmin ? ['admin'] : [])];
     setActiveTab(saved && allowed.includes(saved) ? saved : allowed[0]);
-  }, [auth]);
+  }, [auth, isAdmin]);
 
   useEffect(() => {
     if (auth) savedTab.save(activeTab);
@@ -209,6 +220,31 @@ export default function App() {
    * Jonli yangilanishlar. Kirgandan keyin ulanamiz, chiqishda uzamiz.
    * Kelgan har bir voqea mahalliy holatga qo'shiladi — sahifani yangilash shart emas.
    */
+  /**
+   * Admin huquqi serverdan so'raladi. Bu faqat interfeys uchun — panelning
+   * o'zi ham, har bir amal ham serverda alohida tekshiriladi.
+   */
+  useEffect(() => {
+    if (!auth) {
+      setIsAdmin(false);
+      return;
+    }
+
+    let cancelled = false;
+    void api
+      .amIAdmin()
+      .then((result) => {
+        if (!cancelled) setIsAdmin(result.isAdmin);
+      })
+      .catch(() => {
+        if (!cancelled) setIsAdmin(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth]);
+
   useEffect(() => {
     if (!auth) {
       setIsLive(false);
@@ -375,6 +411,23 @@ export default function App() {
     [],
   );
 
+  const handleSubmitReport = useCallback(async () => {
+    if (!reportTarget) return;
+    setReportBusy(true);
+    try {
+      await api.reportCampaign(reportTarget.id, reportReason, reportComment.trim() || undefined);
+      setReportTarget(null);
+      setToast({
+        kind: 'success',
+        text: "Shikoyat yuborildi. Administrator e'lonni tekshiradi.",
+      });
+    } catch (error) {
+      fail(error, 'Shikoyatni yuborib bo‘lmadi');
+    } finally {
+      setReportBusy(false);
+    }
+  }, [fail, reportComment, reportReason, reportTarget]);
+
   const openChatWithBlogger = useCallback(
     (bloggerId: string) => {
       const blogger = data.bloggers.find((b) => b.id === bloggerId);
@@ -466,6 +519,7 @@ export default function App() {
         onOpenCreateCampaign={() => setIsCampaignCreatorOpen(true)}
         onOpenAccountModal={() => setIsAccountModalOpen(true)}
         profile={auth.profile}
+        isAdmin={isAdmin}
       />
 
       {/* Sidebar lg dan boshlab doimiy ko'rinadi — kontentni chapdan siljitamiz. */}
@@ -479,6 +533,7 @@ export default function App() {
           onOpenAccountModal={() => setIsAccountModalOpen(true)}
           profile={auth.profile}
           onSelectTab={setActiveTab}
+          isAdmin={isAdmin}
         />
 
         {loadError && (
@@ -507,6 +562,11 @@ export default function App() {
               onOpenChatWithBrand={openChatWithBrand}
               highlightCampaignId={highlightCampaignId}
               onHighlightShown={() => setHighlightCampaignId(null)}
+              onReportCampaign={(campaign) => {
+                setReportReason(REPORT_REASONS[0]);
+                setReportComment('');
+                setReportTarget(campaign);
+              }}
             />
           )}
 
@@ -516,6 +576,10 @@ export default function App() {
 
           {activeTab === 'profile' && currentBrand && (
             <BrandProfileStudio profile={currentBrand} onUpdateProfile={handleUpdateBrandProfile} />
+          )}
+
+          {activeTab === 'admin' && isAdmin && (
+            <AdminPanel onToast={(kind, text) => setToast({ kind, text })} />
           )}
         </main>
 
@@ -587,6 +651,71 @@ export default function App() {
       />
 
       <HowItWorksModal isOpen={isHowItWorksOpen} onClose={() => setIsHowItWorksOpen(false)} />
+
+      {/* Yolg'on e'lon haqida xabar berish */}
+      <Modal
+        isOpen={reportTarget !== null}
+        onClose={() => setReportTarget(null)}
+        size="md"
+        eyebrow="Shikoyat"
+        title="Bu e'lon shubhalimi?"
+        icon={<Flag className="w-4 h-4 text-rose-600" aria-hidden="true" />}
+        bodyClassName="p-6"
+        initialFocusSelector="#report-reason"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            «{reportTarget?.title}» e'loni administratorga tekshirish uchun yuboriladi. Boshqa
+            foydalanuvchilar sizning shikoyatingizni ko'rmaydi.
+          </p>
+
+          <label className="block">
+            <span className="text-xs font-bold text-slate-700">Sabab</span>
+            <select
+              id="report-reason"
+              value={reportReason}
+              onChange={(event) => setReportReason(event.target.value)}
+              className="mt-1.5 w-full px-3.5 py-2.5 rounded-2xl border border-purple-100 text-sm font-semibold outline-none focus:border-violet-400 bg-white"
+            >
+              {REPORT_REASONS.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-bold text-slate-700">Qo'shimcha izoh (ixtiyoriy)</span>
+            <textarea
+              value={reportComment}
+              onChange={(event) => setReportComment(event.target.value)}
+              rows={3}
+              maxLength={1000}
+              placeholder="Nima noto'g'ri ekanini qisqacha yozing"
+              className="mt-1.5 w-full px-3.5 py-2.5 rounded-2xl border border-purple-100 text-sm outline-none focus:border-violet-400 resize-none"
+            />
+          </label>
+
+          <div className="flex items-center gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setReportTarget(null)}
+              className="text-xs font-black px-4 py-2.5 rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition cursor-pointer"
+            >
+              Bekor qilish
+            </button>
+            <button
+              type="button"
+              disabled={reportBusy}
+              onClick={() => void handleSubmitReport()}
+              className="text-xs font-black px-4 py-2.5 rounded-2xl bg-rose-600 text-white hover:bg-rose-700 transition cursor-pointer disabled:opacity-40"
+            >
+              {reportBusy ? 'Yuborilmoqda…' : 'Shikoyatni yuborish'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {toast && (
         <div

@@ -6,6 +6,7 @@ import {
   HelpCircle,
   Instagram,
   PlusCircle,
+  ShieldCheck,
   UserCheck,
   X,
 } from 'lucide-react';
@@ -22,6 +23,8 @@ interface SidebarProps {
   onOpenCreateCampaign: () => void;
   onOpenAccountModal: () => void;
   profile: BrandProfile | BloggerProfile;
+  /** Admin huquqi bor bo'lsa — qo'shimcha nazorat bo'limi. */
+  isAdmin?: boolean;
 }
 
 export function Sidebar({
@@ -34,6 +37,7 @@ export function Sidebar({
   onOpenCreateCampaign,
   onOpenAccountModal,
   profile,
+  isAdmin = false,
 }: SidebarProps) {
   const isAdvertiser = userRole === 'advertiser';
   const avatar = isAdvertiser ? (profile as BrandProfile).logo : (profile as BloggerProfile).avatar;
@@ -259,6 +263,37 @@ export function Sidebar({
                   <span>Mening Profilim &amp; Media Kit</span>
                 </span>
                 <ChevronRight className="w-3.5 h-3.5 text-pink-400" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+          {/* Admin bo'limi — faqat huquqi borlarga. */}
+          {isAdmin && (
+            <div className="mt-5 pt-4 border-t border-purple-100/80">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider px-3.5 mb-2">
+                Nazorat
+              </p>
+              <button
+                type="button"
+                id="sidebar-nav-admin"
+                aria-current={activeTab === 'admin' ? 'page' : undefined}
+                onClick={() => handleNavClick('admin')}
+                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-xs font-bold transition cursor-pointer ${
+                  activeTab === 'admin'
+                    ? 'bg-violet-900 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-violet-50'
+                }`}
+              >
+                <span className="flex items-center gap-2.5">
+                  <ShieldCheck
+                    className={`w-4 h-4 ${activeTab === 'admin' ? 'text-white' : 'text-violet-600'}`}
+                    aria-hidden="true"
+                  />
+                  <span>Administrator Paneli</span>
+                </span>
+                <ChevronRight
+                  className={`w-3.5 h-3.5 ${activeTab === 'admin' ? 'text-white/70' : 'text-violet-400'}`}
+                  aria-hidden="true"
+                />
               </button>
             </div>
           )}

@@ -222,6 +222,28 @@ foydalaning — u ilovaning o'zi orqali ishlagani uchun bunday muammo bo'lmaydi.
 
 ---
 
+## Administrator huquqini berish
+
+Ikki yo'ldan biri:
+
+**Bot orqali.** Render'dagi `ADMIN_SETUP_CODE` qiymatini oling va botga yozing:
+
+```
+/admin SIZNING_KODINGIZ
+```
+
+**Muhit o'zgaruvchisi orqali** (Telegram ulanmagan bo'lsa ham ishlaydi). Render → Environment →
+`ADMIN_PHONES` qo'shing:
+
+```
+ADMIN_PHONES=+998901234567
+```
+
+Bir nechta raqamni vergul bilan ajrating. O'zgartirgandan keyin **«Deploy latest commit»** qiling —
+faqat o'zgaruvchini saqlash yetarli emas.
+
+Shundan keyin o'sha hisob bilan panelga kirsangiz, yon menyuda «Administrator Paneli» chiqadi.
+
 ## Ishga tushish tartibi
 
 Server portni **birinchi** ochadi, bazaga esa keyin ulanadi. Neon tekin tarifda

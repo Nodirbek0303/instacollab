@@ -1,9 +1,13 @@
 import type {
+  AccountStatus,
+  AdminAction,
   AuthPayload,
   BloggerProfile,
   BrandProfile,
   Campaign,
+  CampaignReport,
   ChatMessage,
+  ModerationState,
   PlatformState,
   ProposalBid,
   UserRole,
@@ -114,4 +118,66 @@ export const api = {
 
   sendMessage: (partnerId: string, text: string) =>
     request<ChatMessage>('/api/messages', post({ partnerId, text })),
+
+  /* ---- Shikoyat ---- */
+
+  reportCampaign: (campaignId: string, reason: string, comment?: string) =>
+    request<CampaignReport>('/api/reports', post({ campaignId, reason, comment })),
+
+  /* ---- Admin ---- */
+
+  amIAdmin: () => request<{ isAdmin: boolean }>('/api/admin/me'),
+
+  adminOverview: () => request<AdminOverview>('/api/admin/overview'),
+
+  adminAccountAction: (id: string, action: AccountAction, reason?: string) =>
+    request<{ ok: true; status: string }>(`/api/admin/accounts/${encodeURIComponent(id)}`, patch({ action, reason })),
+
+  adminCampaignAction: (id: string, action: CampaignAction, reason?: string) =>
+    request<{ ok: true; state: string }>(`/api/admin/campaigns/${encodeURIComponent(id)}`, patch({ action, reason })),
+
+  adminResolveReport: (id: string, outcome: 'removed' | 'rejected') =>
+    request<{ ok: true }>(`/api/admin/reports/${encodeURIComponent(id)}`, patch({ outcome })),
+
+  adminResetPassword: (id: string) =>
+    request<{ ok: true; password: string }>(
+      `/api/admin/accounts/${encodeURIComponent(id)}/reset-password`,
+      { method: 'POST' },
+    ),
 };
+
+export type AccountAction = 'freeze' | 'unfreeze' | 'delete' | 'restore';
+export type CampaignAction = 'hide' | 'show' | 'delete' | 'restore';
+
+/** Admin panelidagi bitta hisob qatori. */
+export interface AdminAccountRow {
+  id: string;
+  phone: string;
+  role: UserRole;
+  profileId: string;
+  profileName: string;
+  profileAvatar: string;
+  createdAt: string;
+  telegramId: number | null;
+  telegramUsername: string | null;
+  status: AccountStatus;
+  statusReason: string | null;
+  statusAt: string | null;
+  isAdmin: boolean;
+  campaignsCount: number;
+  bidsCount: number;
+}
+
+export interface AdminCampaignRow extends Campaign {
+  moderationState: ModerationState;
+  reportsCount: number;
+  ownerStatus: AccountStatus;
+}
+
+export interface AdminOverview {
+  stats: Record<string, number>;
+  accounts: AdminAccountRow[];
+  campaigns: AdminCampaignRow[];
+  reports: CampaignReport[];
+  log: AdminAction[];
+}
