@@ -15,6 +15,8 @@ import { cachedState, savedTab } from './lib/storage';
 import { getInitData, initTelegram, isTelegramMiniApp } from './lib/telegram';
 import { applyEvent, connectLive } from './lib/live';
 import { AdminPanel } from './components/AdminPanel';
+import { BloggersCatalog } from './components/BloggersCatalog';
+import { VerifiedPanel } from './components/VerifiedPanel';
 import { Modal } from './components/Modal';
 
 import { AuthScreen } from './components/AuthScreen';
@@ -31,6 +33,7 @@ import { AccountModal } from './components/AccountModal';
 const EMPTY_STATE: PlatformState = {
   brands: [],
   bloggers: [],
+  follows: [],
   campaigns: [],
   bids: [],
   messages: [],
@@ -86,6 +89,7 @@ export default function App() {
   >(null);
 
   const userRole = auth?.account.role ?? 'advertiser';
+  const isAdvertiser = userRole === 'advertiser';
 
   /* ---------------- Sessiyani tekshirish ---------------- */
 
@@ -187,8 +191,7 @@ export default function App() {
   useEffect(() => {
     if (!auth) return;
     const saved = savedTab.load();
-    // Blogerlar katalogi yopiq — ikkala rol uchun ham faqat ikki bo'lim qoldi.
-    const allowed = ['campaigns', 'profile', ...(isAdmin ? ['admin'] : [])];
+    const allowed = ['campaigns', 'bloggers', 'profile', ...(isAdmin ? ['admin'] : [])];
     setActiveTab(saved && allowed.includes(saved) ? saved : allowed[0]);
   }, [auth, isAdmin]);
 
@@ -411,6 +414,55 @@ export default function App() {
     [],
   );
 
+  /** Joriy bloger obuna bo'lgan profillar. */
+  const followingIds = useMemo(
+    () =>
+      currentBlogger
+        ? data.follows.filter((f) => f.followerId === currentBlogger.id).map((f) => f.targetId)
+        : [],
+    [currentBlogger, data.follows],
+  );
+
+  const handleToggleFollow = useCallback(
+    async (targetId: string) => {
+      if (!currentBlogger) return;
+
+      try {
+        const result = await api.toggleFollow(targetId);
+        setToast({
+          kind: 'success',
+          text: result.following ? "Obuna bo'ldingiz" : 'Obuna bekor qilindi',
+        });
+        // Serverdan kelgan jonli voqea holatni o'zi yangilaydi, lekin
+        // tugma darhol javob bersin.
+        setData((prev) => {
+          const others = prev.follows.filter(
+            (f) => !(f.followerId === currentBlogger.id && f.targetId === targetId),
+          );
+          const next = {
+            ...prev,
+            follows: result.following
+              ? [
+                  {
+                    id: `${currentBlogger.id}::${targetId}`,
+                    followerId: currentBlogger.id,
+                    targetId,
+                    createdAt: new Date().toISOString(),
+                  },
+                  ...others,
+                ]
+              : others,
+          };
+          cachedState.save(next);
+          return next;
+        });
+      } catch (error) {
+        fail(error, "Obunani o'zgartirib bo'lmadi");
+      }
+    },
+    [currentBlogger, fail],
+  );
+
   const handleSubmitReport = useCallback(async () => {
     if (!reportTarget) return;
     setReportBusy(true);
@@ -461,6 +513,27 @@ export default function App() {
       }
     },
     [fail, openChatWithBlogger],
+  );
+
+  /**
+   * Zakaz bajarildi. Bu shunchaki belgi emas — blogerning statistikasiga
+   * kirib, katalogda hammaga ko'rinadi.
+   */
+  const handleCompleteBid = useCallback(
+    async (bid: ProposalBid) => {
+      try {
+        const updated = await api.updateBidStatus(bid.id, 'completed');
+        setData((prev) => {
+          const next = { ...prev, bids: prev.bids.map((b) => (b.id === updated.id ? updated : b)) };
+          cachedState.save(next);
+          return next;
+        });
+        setToast({ kind: 'success', text: "Zakaz bajarildi deb belgilandi — blogerning statistikasiga qo'shildi." });
+      } catch (error) {
+        fail(error, "Zakazni yakunlab bo'lmadi.");
+      }
+    },
+    [fail],
   );
 
   const handleSendMessage = useCallback(
@@ -547,6 +620,18 @@ export default function App() {
         )}
 
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          {activeTab === 'bloggers' && (
+            <BloggersCatalog
+              bloggers={data.bloggers}
+              canContact={isAdvertiser}
+              onOpenCreateCampaign={() => setIsCampaignCreatorOpen(true)}
+              onOpenChatWithBlogger={openChatWithBlogger}
+              currentBloggerId={currentBlogger?.id ?? null}
+              followingIds={followingIds}
+              onToggleFollow={handleToggleFollow}
+            />
+          )}
+
           {activeTab === 'campaigns' && (
             <CampaignMarketplace
               campaigns={data.campaigns}
@@ -557,6 +642,7 @@ export default function App() {
               onApplyBid={handleApplyBid}
               onOpenCreateCampaign={() => setIsCampaignCreatorOpen(true)}
               onAcceptBid={handleAcceptBid}
+              onCompleteBid={handleCompleteBid}
               onDeleteCampaign={handleDeleteCampaign}
               onOpenChatWithBlogger={openChatWithBlogger}
               onOpenChatWithBrand={openChatWithBrand}
@@ -571,7 +657,13 @@ export default function App() {
           )}
 
           {activeTab === 'profile' && currentBlogger && (
-            <CreatorProfileStudio profile={currentBlogger} onUpdateProfile={handleUpdateBloggerProfile} />
+            <div className="space-y-6">
+              <VerifiedPanel
+                profile={currentBlogger}
+                onToast={(kind, text) => setToast({ kind, text })}
+              />
+              <CreatorProfileStudio profile={currentBlogger} onUpdateProfile={handleUpdateBloggerProfile} />
+            </div>
           )}
 
           {activeTab === 'profile' && currentBrand && (

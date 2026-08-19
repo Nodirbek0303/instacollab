@@ -11,6 +11,7 @@ import type {
   PlatformState,
   ProposalBid,
   UserRole,
+  VerificationRequest,
 } from '../types';
 
 /** Server qaytargan xatoni foydalanuvchiga tushunarli matn bilan uzatadi. */
@@ -139,6 +140,32 @@ export const api = {
   adminResolveReport: (id: string, outcome: 'removed' | 'rejected') =>
     request<{ ok: true }>(`/api/admin/reports/${encodeURIComponent(id)}`, patch({ outcome })),
 
+  /* ---- Hamjamiyat va ptichka ---- */
+
+  toggleFollow: (targetId: string) =>
+    request<{ following: boolean; followers: number }>('/api/follows', post({ targetId })),
+
+  requestVerification: (note?: string) =>
+    request<VerificationRequest>('/api/verification/request', post({ note })),
+
+  myVerification: () =>
+    request<{ request: VerificationRequest | null; price: string | null }>('/api/verification/mine'),
+
+  setThemeColor: (color: string | null) =>
+    request<{ ok: true; themeColor: string | null }>('/api/verification/color', patch({ color })),
+
+  adminDecideVerification: (id: string, decision: 'approved' | 'rejected', note?: string) =>
+    request<{ ok: true }>(
+      `/api/admin/verification/requests/${encodeURIComponent(id)}`,
+      patch({ decision, note }),
+    ),
+
+  adminSetVerification: (bloggerId: string, action: 'grant' | 'revoke', reason?: string) =>
+    request<{ ok: true; isVerified: boolean }>(
+      `/api/admin/verification/${encodeURIComponent(bloggerId)}`,
+      patch({ action, reason }),
+    ),
+
   adminResetPassword: (id: string) =>
     request<{ ok: true; password: string }>(
       `/api/admin/accounts/${encodeURIComponent(id)}/reset-password`,
@@ -174,10 +201,21 @@ export interface AdminCampaignRow extends Campaign {
   ownerStatus: AccountStatus;
 }
 
+export interface AdminVerifiedRow {
+  id: string;
+  name: string;
+  username: string;
+  avatar: string;
+  verifiedAt: string | null;
+  themeColor: string | null;
+}
+
 export interface AdminOverview {
   stats: Record<string, number>;
   accounts: AdminAccountRow[];
   campaigns: AdminCampaignRow[];
   reports: CampaignReport[];
+  verificationRequests: VerificationRequest[];
+  verifiedBloggers: AdminVerifiedRow[];
   log: AdminAction[];
 }

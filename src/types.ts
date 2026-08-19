@@ -91,7 +91,22 @@ export interface BloggerProfile {
   avgReelsViews: number;
   engagementRate: number; // masalan: 7.8
   tier: BloggerTier;
+  /**
+   * Rasmiy tasdiq belgisi — «ptichka». Uni admin beradi (odatda to'lovdan
+   * keyin) va istalgan payt olib qo'yadi. Nima beradi:
+   *   • yangi e'lonlarni boshqalardan 15 daqiqa oldin ko'radi;
+   *   • arizasi brendning ro'yxatida tepada turadi;
+   *   • profil rangini o'zi tanlaydi va u hammaga ko'rinadi.
+   */
   isVerified: boolean;
+  verifiedAt?: string;
+  /** Ptichkani bergan admin hisobining id'si. */
+  verifiedBy?: string;
+  /**
+   * Profil rangi — faqat ptichkali bloger belgilay oladi. `#RRGGBB`.
+   * Katalogda va profilda hammaga shu rangda ko'rinadi.
+   */
+  themeColor?: string;
   rating: number;
   completedDeals: number;
   audienceDemographics?: AudienceDemographics;
@@ -100,6 +115,14 @@ export interface BloggerProfile {
   tags: string[];
   contactTelegram?: string;
   phone?: string;
+  /**
+   * Ish statistikasi — server javobga qo'shib beradi.
+   *
+   * Bazada **saqlanmaydi**: har safar arizalardan qayta hisoblanadi.
+   * `readBloggerBody` uni o'qimaydi, shuning uchun mijoz orqali soxta
+   * qiymat yozib bo'lmaydi.
+   */
+  stats?: BloggerStats;
 }
 
 export interface Campaign {
@@ -128,7 +151,75 @@ export interface Campaign {
   };
   /** Admin qarori. Yo'q bo'lsa — tekshiruvdan o'tmagan, lekin ko'rinadi. */
   moderation?: Moderation;
+  /**
+   * E'lon aniq qachon joylangani (ISO). `createdDate` faqat ko'rsatish uchun,
+   * bu esa hisob-kitob uchun: ptichkali blogerlar e'lonni shu vaqtdan
+   * boshlab ko'radi, qolganlar EARLY_ACCESS_MINUTES dan keyin.
+   */
+  publishedAt?: string;
+  /** Kechiktirilgan xabar hammaga yuborilgan vaqt — takror yuborilmasligi uchun. */
+  notifiedAllAt?: string;
 }
+
+/**
+ * Blogerning ish statistikasi. Saqlanmaydi — har safar arizalardan
+ * hisoblanadi, shuning uchun har doim haqiqatga mos bo'ladi.
+ */
+export interface BloggerStats {
+  /** Yuborilgan arizalar. */
+  bidsSent: number;
+  /** Qabul qilingan arizalar — ya'ni olingan zakazlar. */
+  ordersTotal: number;
+  /** Yakunlangan zakazlar. */
+  ordersCompleted: number;
+  /** Rad etilgan arizalar. */
+  bidsRejected: number;
+  /** Hozir ishda turgan zakazlar. */
+  ordersActive: number;
+  /** Oxirgi zakaz sanasi (ISO) yoki null. */
+  lastOrderAt: string | null;
+  /** Obunachilar (platforma ichida) va o'zi obuna bo'lganlar soni. */
+  followers: number;
+  following: number;
+}
+
+/** Bloger bloger·ga obuna bo'ladi. */
+export interface Follow {
+  id: string;
+  /** Obuna bo'lgan bloger profilining id'si. */
+  followerId: string;
+  /** Kimga obuna bo'lgani. */
+  targetId: string;
+  createdAt: string;
+}
+
+/**
+ * Ptichka uchun so'rov. Bloger tugmani bosadi, admin to'lovni tashqarida
+ * olib, panelda tasdiqlaydi yoki rad etadi. Kod ichida pul bilan ishlanmaydi.
+ */
+export interface VerificationRequest {
+  id: string;
+  bloggerId: string;
+  bloggerName: string;
+  bloggerUsername: string;
+  phone?: string;
+  contactTelegram?: string;
+  /** Blogerning izohi — to'lov haqida yoki savol. */
+  note?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  decidedAt?: string;
+  /** Qaror qabul qilgan admin hisobining id'si. */
+  decidedBy?: string;
+  /** Adminning izohi (masalan rad etish sababi). */
+  decisionNote?: string;
+}
+
+/**
+ * Ariza holati. `accepted` — bloger zakaz oldi, `completed` — zakaz
+ * bajarildi. Statistika aynan shu ikkitasidan yuritiladi.
+ */
+export type BidStatus = 'pending' | 'accepted' | 'rejected' | 'completed';
 
 export interface ProposalBid {
   id: string;
@@ -145,7 +236,9 @@ export interface ProposalBid {
   bloggerPhone?: string;
   message: string;
   creativeIdea: string;
-  status: 'pending' | 'accepted' | 'rejected';
+  status: BidStatus;
+  /** Zakaz yakunlangan sana — statistika shundan hisoblanadi. */
+  completedAt?: string;
   submittedAt: string;
   /** Bloger e'londagi minimal obunachi talabiga javob bermaganda belgilanadi. */
   belowRequirement?: boolean;
@@ -249,6 +342,8 @@ export interface PlatformState {
   campaigns: Campaign[];
   bids: ProposalBid[];
   messages: ChatMessage[];
+  /** Blogerlar orasidagi obunalar — kim kimga obuna bo'lgani. */
+  follows: Follow[];
 }
 
 /* ---------------- Telegram bot va yordam xizmati ---------------- */
@@ -339,7 +434,15 @@ export interface DatabaseShape extends PlatformState {
   botSessions: BotSession[];
   reports: CampaignReport[];
   adminLog: AdminAction[];
+  follows: Follow[];
+  verificationRequests: VerificationRequest[];
 }
+
+/**
+ * Ptichkasiz blogerlar yangi e'lonni shuncha daqiqa kechroq ko'radi.
+ * Ptichkalilar esa darhol — bu ptichkaning asosiy foydasi.
+ */
+export const EARLY_ACCESS_MINUTES = 15;
 
 /** Ikki tomon o'rtasidagi suhbat kalitini bir xil tarzda hosil qiladi. */
 export function buildThreadId(brandId: string, bloggerId: string): string {

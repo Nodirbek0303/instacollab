@@ -39,6 +39,8 @@ interface CampaignMarketplaceProps {
   onReportCampaign: (campaign: Campaign) => void;
   onOpenCreateCampaign: () => void;
   onAcceptBid: (bid: ProposalBid) => void;
+  /** Zakaz bajarildi — blogerning statistikasiga qo'shiladi. */
+  onCompleteBid: (bid: ProposalBid) => void;
   onDeleteCampaign: (campaignId: string) => void;
   onOpenChatWithBlogger: (bloggerId: string) => void;
   onOpenChatWithBrand: (brandId: string) => void;
@@ -60,6 +62,7 @@ export function CampaignMarketplace({
   onReportCampaign,
   onOpenCreateCampaign,
   onAcceptBid,
+  onCompleteBid,
   onDeleteCampaign,
   onOpenChatWithBlogger,
   onOpenChatWithBrand,
@@ -554,11 +557,21 @@ export function CampaignMarketplace({
                                     <span>Chatda yozish</span>
                                   </button>
 
-                                  {bid.status === 'accepted' ? (
-                                    <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1">
-                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
-                                      Kelishildi
+                                  {bid.status === 'completed' ? (
+                                    <span className="bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                                      Bajarildi
                                     </span>
+                                  ) : bid.status === 'accepted' ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => onCompleteBid(bid)}
+                                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold px-3 py-2 rounded-xl transition cursor-pointer flex items-center gap-1"
+                                      title="Reklama chiqdi — zakazni yakunlash. Bu blogerning statistikasiga qo'shiladi."
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                                      <span>Bajarildi deb belgilash</span>
+                                    </button>
                                   ) : (
                                     <button
                                       type="button"
@@ -616,18 +629,22 @@ export function CampaignMarketplace({
                       <span className="text-xs font-bold text-slate-500 uppercase truncate">{bid.brandName}</span>
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                          bid.status === 'accepted'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : bid.status === 'rejected'
-                              ? 'bg-rose-100 text-rose-800'
-                              : 'bg-amber-100 text-amber-800'
+                          bid.status === 'completed'
+                            ? 'bg-slate-900 text-white'
+                            : bid.status === 'accepted'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : bid.status === 'rejected'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-amber-100 text-amber-800'
                         }`}
                       >
-                        {bid.status === 'accepted'
-                          ? 'Kelishildi'
-                          : bid.status === 'rejected'
-                            ? 'Rad etildi'
-                            : "Ko'rib chiqilmoqda"}
+                        {bid.status === 'completed'
+                          ? 'Bajarildi'
+                          : bid.status === 'accepted'
+                            ? 'Kelishildi'
+                            : bid.status === 'rejected'
+                              ? 'Rad etildi'
+                              : "Ko'rib chiqilmoqda"}
                       </span>
                     </div>
 

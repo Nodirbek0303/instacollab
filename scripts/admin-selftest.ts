@@ -20,7 +20,12 @@ const { check, report } = createChecker();
 let harness: Harness | null = null;
 
 async function main(): Promise<void> {
-  harness = await startTestServer({ port: 34568, env: { ADMIN_PHONES: ADMIN_PHONE } });
+  // Ptichka kutish oynasi bu yerda o'chiriladi — u `community-selftest` da
+  // tekshiriladi va bu sinovda faqat xalaqit berardi.
+  harness = await startTestServer({
+    port: 34568,
+    env: { ADMIN_PHONES: ADMIN_PHONE, EARLY_ACCESS_MINUTES: '0' },
+  });
 
   const admin = harness.session('admin');
   const brand = harness.session('brend');

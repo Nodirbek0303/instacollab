@@ -136,10 +136,6 @@ Endi:
 4. **«E'lonni joylashtirish»** → e'lon bozorga chiqadi va o'sha yo'nalishdagi, talabga mos
    blogerlarga **darhol Telegram xabari** boradi.
 
-> **Eslatma.** Reklama beruvchi blogerlar ro'yxatini ko'ra olmaydi — katalog yo'q.
-> Aloqani bloger boshlaydi: e'lonni ko'radi va ariza yuboradi, shundan keyingina
-> e'lon egasi uni ko'radi va u bilan bog'lana oladi.
-
 ### Bloger: e'lonni ko'rish va bog'lanish
 
 1. Botda **«📢 Reklama e'lonlari»** → e'lonlar ro'yxati (sahifalab ko'riladi).
@@ -239,6 +235,26 @@ umuman ko'rinmaydi va API darajasida ham yopiq.
 **Ro'yxatdan chiqarish.** Raqamni `ADMIN_PHONES` dan olib tashlab qayta joylang — server ishga
 tushishida huquqni bazadan ham olib qo'yadi. Jurnalda `[admin] ruxsat etilgan raqamlar: …` degan
 qator chiqadi, shundan tekshirib olasiz.
+
+## Ptichka narxini ko'rsatish (ixtiyoriy)
+
+Render → Environment:
+
+```
+VERIFICATION_PRICE=99 000 so'm / oy
+```
+
+Bu matn blogerga «Rasmiy ptichka» bo'limida ko'rinadi. Berilmasa narx ko'rsatilmaydi va bloger
+so'rov yuborganda siz to'lov tartibini o'zingiz tushuntirasiz.
+
+To'lovning o'zi kod ichida emas: siz uni Click, karta yoki naqd orqali olasiz va admin panelida
+«To'lov qabul qilindi — ptichka bering» tugmasini bosasiz.
+
+Ptichkasizlar e'lonni necha daqiqa kechroq ko'rishini o'zgartirish uchun:
+
+```
+EARLY_ACCESS_MINUTES=15
+```
 
 ## Ishga tushish tartibi
 

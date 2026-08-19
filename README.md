@@ -24,21 +24,20 @@ Server har bir amalni sessiya bo'yicha tekshiradi, masalan:
 - profilni faqat egasi tahrirlay oladi;
 - tizimga kirmagan odam hech qanday ma'lumotni ko'ra olmaydi.
 
-### Blogerlar ro'yxati yopiq
+### Nima ochiq, nima yopiq
 
-Reklama beruvchi blogerlarni ko'rib chiqa olmaydi — katalog yo'q. Aloqani **bloger boshlaydi**:
-u e'lonni ko'radi va ariza yuboradi, shundan keyingina e'lon egasi uni ko'radi.
+Katalog ochiq: blogerlar ham, reklama beruvchilar ham bir-birini ko'radi. Shaxsiy narsalar esa
+har doim yopiq:
 
-| Kim | Qaysi blogerlarni ko'radi |
+| Ma'lumot | Kim ko'radi |
 | --- | --- |
-| Reklama beruvchi | Faqat o'z e'loniga ariza yuborgan yoki u bilan yozishgan blogerlarni |
-| Bloger | Faqat o'zini |
+| Blogerlar katalogi va statistikasi | Hamma |
+| E'lonlar | Hamma (ptichkasizlar yangi e'lonni 15 daqiqa kechroq) |
+| Ariza va undagi kontaktlar | Faqat e'lon egasi va ariza yuborgan bloger |
+| Chat yozishmalari | Faqat suhbatning ikki tomoni |
 
-Bu cheklov `GET /api/state` ichida — serverda — bajariladi. Ya'ni interfeysni chetlab o'tib
-API'ga to'g'ridan-to'g'ri murojaat qilgan odam ham ro'yxatni ololmaydi. Jonli yangilanishlarda
-ham shunday: bloger profili o'zgarsa, xabar faqat o'ziga va u bilan ishlagan brendlarga boradi.
-
-E'lonlar va ularni joylagan brendlar esa **ochiq** — bozorning mohiyati shunda.
+Bu cheklovlar `GET /api/state` ichida — serverda — bajariladi. Ya'ni interfeysni chetlab o'tib
+API'ga to'g'ridan-to'g'ri murojaat qilgan odam ham begona arizani yoki yozishmani ololmaydi.
 
 ## Telegram bot
 
@@ -177,7 +176,8 @@ npm run test:storage     # saqlash qatlami: Postgres va fayl (25 ta tekshiruv)
 npm run test:webhook     # webhook manzili va imzosi (11 ta tekshiruv)
 npm run test:bot         # Telegram bot mantiqi (54 ta tekshiruv)
 npm run test:visibility  # kim kimni ko'radi (24 ta tekshiruv, `npm run build` talab qiladi)
-npm run test:admin       # admin paneli va moderatsiya (46 ta tekshiruv)
+npm run test:admin       # admin paneli va moderatsiya (49 ta tekshiruv)
+npm run test:community   # statistika, obuna, ptichka (53 ta tekshiruv)
 npm run build         # frontend + server bundle -> dist/
 npm start             # tayyor bundle'ni ishga tushirish
 ```
@@ -212,6 +212,12 @@ npm start             # tayyor bundle'ni ishga tushirish
 | `POST` | `/api/admin/accounts/:id/reset-password` | **admin** | Parolni tiklash |
 | `PATCH` | `/api/admin/campaigns/:id` | **admin** | E'lonni yashirish / o'chirish / qaytarish |
 | `PATCH` | `/api/admin/reports/:id` | **admin** | Shikoyatni yopish |
+| `POST` | `/api/follows` | bloger | Obuna bo'lish / bekor qilish |
+| `POST` | `/api/verification/request` | bloger | Ptichka so'rash |
+| `GET` | `/api/verification/mine` | sessiya | O'z so'rovi holati va narx |
+| `PATCH` | `/api/verification/color` | ptichkali bloger | Profil rangini o'zgartirish |
+| `PATCH` | `/api/admin/verification/requests/:id` | **admin** | So'rovni tasdiqlash / rad etish |
+| `PATCH` | `/api/admin/verification/:bloggerId` | **admin** | Ptichkani berish / olib qo'yish |
 
 Barcha yozuv so'rovlari validatsiyadan o'tadi, uzunligi cheklanadi va IP bo'yicha rate-limit qo'llanadi
 (kirish/ro'yxat uchun alohida, qattiqroq chegara).
@@ -232,6 +238,63 @@ o'zgarmas bo'lgani uchun brauzer uni bir yil keshlaydi.
 
 Server tekshiruvlari: tur (faqat JPG/PNG/WEBP), hajm (3 MB gacha) va **sarlavha baytlari** —
 ya'ni `.png` deb nomlangan matn fayli o'tib ketmaydi.
+
+## Bloger hamjamiyati
+
+### Zakaz statistikasi
+
+Har bir blogerning ishi platformada yuritib boriladi va katalogda hammaga ko'rinadi:
+nechta zakaz olgani, nechtasi bajarilgani, nechta obunachisi borligi.
+
+Statistika **saqlanmaydi** — har safar arizalardan qayta hisoblanadi. Sababi oddiy: saqlanadigan
+sanagich ertami-kechmi haqiqatdan chetga chiqadi (ariza o'chirilsa yoki holat qo'lda o'zgartirilsa),
+hisoblangani esa har doim to'g'ri bo'ladi.
+
+| Ko'rsatkich | Nimadan olinadi |
+| --- | --- |
+| Zakaz | Qabul qilingan va bajarilgan arizalar |
+| Bajarilgan | Brend «Bajarildi» deb belgilagan zakazlar |
+| Ishda | Qabul qilingan, lekin hali yakunlanmagan |
+| Rad etilgan | Brend rad etgan arizalar |
+| Obunachi | Platforma ichidagi obunalar |
+
+Zakaz `accepted` → `completed` yo'lidan o'tadi. Reklama chiqqach brend «Bajarildi deb belgilash»
+tugmasini bosadi — shundan keyin u blogerning statistikasiga tushadi.
+
+### Obunalar
+
+Blogerlar bir-biriga obuna bo'la oladi. Tugma bosilganda holat teskarisiga o'tadi, obunachi soni
+esa ikkala profilda darhol yangilanadi. Reklama beruvchilar obuna bo'la olmaydi — bu bloger
+hamjamiyati uchun.
+
+## Rasmiy ptichka
+
+Blogerlar sotib oladigan tasdiq belgisi. Uni **admin beradi va istalgan payt olib qo'yadi**.
+
+### Nima o'zgaradi
+
+| Imtiyoz | Tafsilot |
+| --- | --- |
+| **E'lonni 15 daqiqa oldin ko'rish** | Yangi e'lon avval ptichkalilarga ochiladi. Shu davrda boshqalar uni ko'rmaydi va ariza ham yubora olmaydi |
+| **Arizasi tepada turadi** | Brendning «Kelgan arizalar» ro'yxatida ptichkalilar eng yuqorida |
+| **Profil rangi** | Bloger o'zi tanlaydi, katalogda hammaga o'sha rangda ko'rinadi |
+| **Ajralib turish** | Kartasi tanlangan rangda yaltirab turadi va katalogda tepaga chiqadi |
+
+Kutish oynasi `EARLY_ACCESS_MINUTES` bilan o'zgartiriladi (standart 15).
+
+### To'lov
+
+Kod ichida pul bilan ishlanmaydi. Bloger «So'rov yuborish» tugmasini bosadi → adminga Telegram
+orqali xabar boradi → admin to'lovni tashqarida (Click, karta, naqd) oladi va panelda
+«To'lov qabul qilindi — ptichka bering» tugmasini bosadi. Rad etsa, sabab blogerga yetkaziladi.
+
+Narxni `VERIFICATION_PRICE` orqali ko'rsatish mumkin (masalan `99 000 so'm / oy`). Berilmasa
+narx ko'rsatilmaydi va bloger admin bilan kelishadi.
+
+### Rang qoidalari
+
+Faqat `#RRGGBB`. Server rangni tekshiradi va juda och ranglarni qabul qilmaydi — ular oq fonda
+o'qilmaydi. Ptichka olib qo'yilsa rang ham avtomatik bekor bo'ladi.
 
 ## Administrator paneli
 
@@ -322,6 +385,8 @@ uzmasligi uchun har 25 soniyada bo'sh signal yuboriladi. Ilova fondan qaytganda
 | `PORT` | Server porti (standart 3000) |
 | `DATA_DIR` | Ma'lumotlar katalogi (fayl rejimida) |
 | `ADMIN_PHONES` | Vergul bilan ajratilgan telefon raqamlari — **faqat** shu hisoblar admin bo'ladi |
+| `EARLY_ACCESS_MINUTES` | Ptichkasizlar e'lonni shuncha daqiqa kechroq ko'radi (standart 15) |
+| `VERIFICATION_PRICE` | Ptichka narxi — blogerga ko'rsatiladigan matn. Berilmasa ko'rsatilmaydi |
 | `DATABASE_URL` | Postgres manzili. Berilsa — ma'lumotlar shu yerda saqlanadi |
 | `BOT_MODE` | `polling` deb yozilsa, HTTPS bo'lsa ham long polling ishlatiladi |
 | `HOST` | Ilova qaysi manzilda tinglaydi (proksi ortida `127.0.0.1`) |

@@ -21,6 +21,7 @@ import type {
   BrandProfile,
   Campaign,
   CampaignReport,
+  VerificationRequest,
   ChatMessage,
   ModerationState,
   ProposalBid,
@@ -39,6 +40,7 @@ import {
 } from './db';
 import { createAccount, generateTempPassword, hashPassword, revokeAllSessions } from './auth';
 import { adminPhones, isAdminTelegramId } from './admin';
+import { canBloggerSeeCampaign, sortBidsForBrand, statsFor } from './community';
 import { normalizePhone, prettyPhone, str } from './validate';
 
 /* ------------------------------------------------------------------ */
@@ -223,6 +225,7 @@ async function setStep(chatId: number, step: string, draft?: Record<string, unkn
 /* ------------------------------------------------------------------ */
 
 const BTN = {
+  bloggers: '👥 Blogerlar katalogi',
   campaigns: "📢 Reklama e'lonlari",
   myCampaigns: "📋 Mening e'lonlarim",
   myBids: '📤 Mening arizalarim',
@@ -260,8 +263,8 @@ function mainMenu(role: UserRole | 'support'): Keyboard {
     return {
       keyboard: [
         [createBtn],
-        [{ text: BTN.myCampaigns }, { text: BTN.incomingBids }],
-        [{ text: BTN.profile }],
+        [{ text: BTN.bloggers }, { text: BTN.myCampaigns }],
+        [{ text: BTN.incomingBids }, { text: BTN.profile }],
         [panel, { text: BTN.support }],
       ],
       resize_keyboard: true,
@@ -271,7 +274,8 @@ function mainMenu(role: UserRole | 'support'): Keyboard {
     keyboard: [
       [panel],
       [{ text: BTN.campaigns }, { text: BTN.myBids }],
-      [{ text: BTN.profile }, { text: BTN.support }],
+      [{ text: BTN.bloggers }, { text: BTN.profile }],
+      [{ text: BTN.support }],
     ],
     resize_keyboard: true,
   };
@@ -308,10 +312,13 @@ function formatUzs(amount?: number): string {
 }
 
 function bloggerCard(blogger: BloggerProfile, showContacts: boolean): string {
+  const stats = statsFor(blogger.id);
+
   const lines = [
-    `<b>${esc(blogger.name)}</b> — @${esc(blogger.username)}`,
+    `<b>${esc(blogger.name)}</b>${blogger.isVerified ? ' ✅' : ''} — @${esc(blogger.username)}`,
     `${esc(blogger.niche)} · ${esc(blogger.city)} · ${esc(blogger.tier)}`,
     `👥 ${formatFollowers(blogger.followersCount)} obunachi · 👁 Story ${formatFollowers(blogger.avgStoryViews)} · 🎬 Reels ${formatFollowers(blogger.avgReelsViews)} · ⚡️ ${blogger.engagementRate}%`,
+    `📦 ${stats.ordersTotal} ta zakaz · ✔️ ${stats.ordersCompleted} bajarilgan · 👤 ${stats.followers} obunachi (platformada)`,
   ];
   if (blogger.pricing?.story || blogger.pricing?.reels) {
     lines.push(`💰 Story: ${formatUzs(blogger.pricing.story)} · Reels: ${formatUzs(blogger.pricing.reels)}`);
@@ -349,8 +356,38 @@ function pager(kind: string, page: number, total: number): Keyboard {
   return { inline_keyboard: [row] };
 }
 
-function campaignsPage(page: number): { text: string; keyboard: Keyboard } {
-  const all = db.campaigns;
+function bloggersPage(page: number, showContacts: boolean): { text: string; keyboard: Keyboard } {
+  // Ptichkalilar tepada — saytdagi katalog bilan bir xil tartib.
+  const all = [...db.bloggers].sort((a, b) => {
+    if (a.isVerified !== b.isVerified) return a.isVerified ? -1 : 1;
+    return b.followersCount - a.followersCount;
+  });
+
+  const slice = all.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  const text = [
+    `<b>👥 Blogerlar katalogi</b> — jami ${all.length} ta`,
+    '',
+    ...slice.map((blogger) => `${bloggerCard(blogger, showContacts)}\n`),
+  ].join('\n');
+  return { text: text || 'Katalog bo‘sh.', keyboard: pager('bloggers', page, all.length) };
+}
+
+/**
+ * Ko'rish huquqi bo'yicha filtrlangan e'lonlar.
+ *
+ * Ikki qoida: admin yashirgan e'lon hech kimga ko'rinmaydi, ptichkasiz
+ * bloger esa yangi e'lonni 15 daqiqa kechroq ko'radi — saytdagi bilan
+ * bir xil, shunda bot boshqa narsa ko'rsatib qo'ymaydi.
+ */
+function visibleCampaignsFor(viewer: Viewer): Campaign[] {
+  const open = db.campaigns.filter((campaign) => (campaign.moderation?.state ?? 'ok') === 'ok');
+
+  if (viewer.account?.role !== 'blogger') return open;
+  return open.filter((campaign) => canBloggerSeeCampaign(campaign, viewer.account!.profileId));
+}
+
+function campaignsPage(page: number, viewer: Viewer): { text: string; keyboard: Keyboard } {
+  const all = visibleCampaignsFor(viewer);
   const slice = all.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   const text = [
     `<b>📢 Reklama e'lonlari</b> — jami ${all.length} ta`,
@@ -1036,8 +1073,16 @@ async function handleMessage(message: TgMessage): Promise<void> {
   /* ---- Menyu tugmalari ---- */
 
   switch (text) {
+    case BTN.bloggers: {
+      // Kontaktlar faqat reklama beruvchiga — bloger boshqa blogerning
+      // telefonini ko'rmaydi.
+      const { text: body, keyboard } = bloggersPage(0, viewer.account?.role === 'advertiser');
+      await send(chatId, body, keyboard);
+      return;
+    }
+
     case BTN.campaigns: {
-      const { text: body, keyboard } = campaignsPage(0);
+      const { text: body, keyboard } = campaignsPage(0, viewer);
       await send(chatId, body, keyboard);
       return;
     }
@@ -1060,7 +1105,8 @@ async function handleMessage(message: TgMessage): Promise<void> {
       const myCampaignIds = new Set(
         db.campaigns.filter((c) => c.brandId === viewer.account?.profileId).map((c) => c.id),
       );
-      const bids = db.bids.filter((b) => myCampaignIds.has(b.campaignId));
+      // Ptichkalilar tepada — saytdagi tartib bilan bir xil.
+      const bids = sortBidsForBrand(db.bids.filter((b) => myCampaignIds.has(b.campaignId)));
       if (!bids.length) {
         await send(chatId, 'Hozircha ariza kelmadi.', mainMenu('advertiser'));
         return;
@@ -1069,7 +1115,9 @@ async function handleMessage(message: TgMessage): Promise<void> {
         await send(
           chatId,
           [
-            `<b>${esc(bid.bloggerName)}</b> — @${esc(bid.bloggerUsername)}`,
+            `<b>${esc(bid.bloggerName)}</b>${
+              db.bloggers.find((b) => b.id === bid.bloggerId)?.isVerified ? ' ✅' : ''
+            } — @${esc(bid.bloggerUsername)}`,
             `👥 ${formatFollowers(bid.bloggerFollowers)} · ${esc(bid.bloggerNiche)}`,
             bid.belowRequirement ? '⚠️ Obunachilar talabdan past' : '',
             `📢 ${esc(bid.campaignTitle)}`,
@@ -1268,8 +1316,13 @@ async function handleCallback(query: TgCallbackQuery): Promise<void> {
   /* --- Sahifalash --- */
   if (parts[0] === 'page' && messageId) {
     const page = Number(parts[2]) || 0;
-    const { text, keyboard } = campaignsPage(page);
-    await editText(chatId, messageId, text, keyboard);
+    if (parts[1] === 'bloggers') {
+      const { text, keyboard } = bloggersPage(page, viewer.account?.role === 'advertiser');
+      await editText(chatId, messageId, text, keyboard);
+    } else {
+      const { text, keyboard } = campaignsPage(page, viewer);
+      await editText(chatId, messageId, text, keyboard);
+    }
     await answerCallback(query.id);
     return;
   }
@@ -1546,23 +1599,87 @@ export const notify = {
     );
   },
 
-  /** Yangi e'lon — mos yo'nalishdagi, Telegramga ulangan blogerlarga. */
-  async newCampaign(campaign: Campaign): Promise<void> {
+  /**
+   * Yangi e'lon — mos yo'nalishdagi, Telegramga ulangan blogerlarga.
+   *
+   * `onlyVerified` bilan chaqirilsa faqat ptichkalilarga boradi: ular
+   * e'lonni qolganlardan 15 daqiqa oldin ko'radi. Qolganlariga xabar
+   * `sendDelayedCampaignWave()` orqali keyinroq yuboriladi.
+   */
+  async newCampaign(campaign: Campaign, onlyVerified = false): Promise<void> {
     if (!botInfo.enabled) return;
+
     const targets = db.accounts.filter((account) => {
       if (account.role !== 'blogger' || !account.telegramId) return false;
       const blogger = db.bloggers.find((b) => b.id === account.profileId);
       if (!blogger) return false;
+      if (onlyVerified !== blogger.isVerified) return false;
       if (blogger.followersCount < campaign.requiredFollowersMin) return false;
       return blogger.niche === campaign.niche;
     });
 
+    const heading = onlyVerified
+      ? '✅ <b>Ptichkalilar uchun — hammadan oldin!</b>'
+      : '🆕 <b>Sizning yo‘nalishingizda yangi e‘lon!</b>';
+
     for (const account of targets.slice(0, 50)) {
-      await sendToAccount(
-        account,
-        ['🆕 <b>Sizning yo‘nalishingizda yangi e‘lon!</b>', '', campaignCard(campaign)].join('\n'),
-      );
+      await sendToAccount(account, [heading, '', campaignCard(campaign)].join('\n'));
     }
+  },
+
+  /** Yangi obunachi — blogerga. */
+  async newFollower(target: BloggerProfile, follower: BloggerProfile): Promise<void> {
+    await sendToAccount(
+      accountByProfileId(target.id),
+      `👤 <b>@${esc(follower.username)}</b> sizga obuna bo‘ldi.`,
+    );
+  },
+
+  /** Ptichka so'rovi — adminlarga. */
+  async newVerificationRequest(request: VerificationRequest): Promise<void> {
+    if (!botInfo.enabled) return;
+
+    const text = [
+      '✅ <b>Ptichka so‘rovi</b>',
+      '',
+      `👤 ${esc(request.bloggerName)} — @${esc(request.bloggerUsername)}`,
+      request.phone ? `📞 ${esc(request.phone)}` : '',
+      request.note ? `💬 ${esc(request.note).slice(0, 400)}` : '',
+      '',
+      'Admin panelidagi «Ptichka» bo‘limida ko‘rib chiqing.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    for (const telegramId of db.supportAdmins) await send(telegramId, text);
+  },
+
+  /** So'rov bo'yicha qaror — blogerga. */
+  async verificationDecision(
+    request: VerificationRequest,
+    decision: 'approved' | 'rejected',
+    note?: string,
+  ): Promise<void> {
+    const because = note ? `\n\n<b>Izoh:</b> ${esc(note)}` : '';
+
+    await sendToAccount(
+      accountByProfileId(request.bloggerId),
+      decision === 'approved'
+        ? `✅ <b>Tabriklaymiz — ptichka berildi!</b>\n\nEndi yangi e‘lonlarni hammadan 15 daqiqa oldin ko‘rasiz, arizangiz brend ro‘yxatida tepada turadi va profil rangini o‘zingiz tanlaysiz.${because}`
+        : `❌ <b>Ptichka so‘rovingiz rad etildi.</b>${because}`,
+    );
+  },
+
+  /** Admin ptichkani bevosita berdi yoki olib qo'ydi. */
+  async verificationChanged(blogger: BloggerProfile, granted: boolean, reason?: string): Promise<void> {
+    const because = reason ? `\n\n<b>Sabab:</b> ${esc(reason)}` : '';
+
+    await sendToAccount(
+      accountByProfileId(blogger.id),
+      granted
+        ? `✅ <b>Sizga ptichka berildi!</b>\n\nYangi e‘lonlarni hammadan 15 daqiqa oldin ko‘rasiz, arizangiz tepada turadi va profil rangini tanlay olasiz.${because}`
+        : `ℹ️ <b>Ptichka olib qo‘yildi.</b> Profil rangi ham asl holiga qaytdi.${because}`,
+    );
   },
 
   /** Yangi shikoyat — barcha support adminlariga. */

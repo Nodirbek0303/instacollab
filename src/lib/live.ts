@@ -22,7 +22,8 @@ export type PlatformEvent =
   | { type: 'bid:updated'; bid: ProposalBid }
   | { type: 'message:new'; message: ChatMessage }
   | { type: 'blogger:updated'; blogger: BloggerProfile }
-  | { type: 'brand:updated'; brand: BrandProfile };
+  | { type: 'brand:updated'; brand: BrandProfile }
+  | { type: 'follow:changed'; followerId: string; targetId: string; following: boolean };
 
 const EVENT_NAMES: PlatformEvent['type'][] = [
   'campaign:new',
@@ -32,6 +33,7 @@ const EVENT_NAMES: PlatformEvent['type'][] = [
   'message:new',
   'blogger:updated',
   'brand:updated',
+  'follow:changed',
 ];
 
 /** Ro'yxatga elementni qo'shadi yoki mavjudini almashtiradi (takrorlanmasligi uchun). */
@@ -93,6 +95,26 @@ export function applyEvent(state: PlatformState, event: PlatformEvent): Platform
             : c,
         ),
       };
+
+    case 'follow:changed': {
+      const others = state.follows.filter(
+        (f) => !(f.followerId === event.followerId && f.targetId === event.targetId),
+      );
+      return {
+        ...state,
+        follows: event.following
+          ? [
+              {
+                id: `${event.followerId}::${event.targetId}`,
+                followerId: event.followerId,
+                targetId: event.targetId,
+                createdAt: new Date().toISOString(),
+              },
+              ...others,
+            ]
+          : others,
+      };
+    }
 
     default:
       return state;

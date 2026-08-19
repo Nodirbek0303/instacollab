@@ -29,6 +29,8 @@ function emptyDatabase(): DatabaseShape {
     botSessions: [],
     reports: [],
     adminLog: [],
+    follows: [],
+    verificationRequests: [],
   };
 }
 

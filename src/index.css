@@ -48,3 +48,68 @@
 .in-telegram .tg-hidden {
   display: none !important;
 }
+
+/* ------------------------------------------------------------------ */
+/* Ptichkali bloger — kartasi yaltirab, boshqalardan ajralib turadi     */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Rang `--ic-accent` orqali keladi: uni bloger o'zi tanlaydi va hamma
+ * bir xil ko'radi. Yaltirash — kartaning ustidan sekin o'tuvchi yorug'lik.
+ * `pointer-events: none` bo'lgani uchun tugmalarga xalaqit bermaydi.
+ */
+.ic-verified {
+  position: relative;
+  overflow: hidden;
+}
+
+.ic-verified::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    color-mix(in srgb, var(--ic-accent, #7c3aed) 22%, transparent) 45%,
+    color-mix(in srgb, var(--ic-accent, #7c3aed) 42%, transparent) 50%,
+    color-mix(in srgb, var(--ic-accent, #7c3aed) 22%, transparent) 55%,
+    transparent 70%
+  );
+  background-size: 260% 100%;
+  background-position: 140% 0;
+  animation: ic-shine 4.5s ease-in-out infinite;
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+}
+
+@keyframes ic-shine {
+  0%,
+  62% {
+    background-position: 140% 0;
+  }
+  95%,
+  100% {
+    background-position: -40% 0;
+  }
+}
+
+/* Yuqoridagi rangli chiziq ham blogerning rangida bo'ladi. */
+.ic-verified .ic-accent-bar {
+  background: linear-gradient(
+    90deg,
+    var(--ic-accent, #7c3aed),
+    color-mix(in srgb, var(--ic-accent, #7c3aed) 55%, white)
+  );
+  opacity: 1;
+}
+
+/* Harakatni kamaytirish so'ralgan bo'lsa — yaltirash to'xtaydi, rang qoladi. */
+@media (prefers-reduced-motion: reduce) {
+  .ic-verified::after {
+    animation: none;
+    background-position: 50% 0;
+    opacity: 0.28;
+  }
+}

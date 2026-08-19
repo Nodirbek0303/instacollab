@@ -44,6 +44,7 @@ export const cachedState = {
       campaigns: cached.campaigns ?? [],
       bids: cached.bids ?? [],
       messages: cached.messages ?? [],
+      follows: cached.follows ?? [],
     };
   },
   save: (state: PlatformState): void => write(STATE_KEY, state),

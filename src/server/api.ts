@@ -6,6 +6,7 @@ import type {
   BrandProfile,
   Campaign,
   CampaignReport,
+  VerificationRequest,
   ChatMessage,
   ProposalBid,
 } from '../types';
@@ -42,6 +43,15 @@ import { verifyInitData } from './miniapp';
 import { addClient, broadcast, connectedClients, startHeartbeat } from './events';
 import { isAdminAccount, logAction, requireAdmin } from './admin';
 import { blockedReason, canSeeCampaign, isAccountActive, moderationState } from './status';
+import {
+  canBloggerSeeCampaign,
+  minutesUntilOpen,
+  isOpenToEveryone,
+  normalizeThemeColor,
+  sortBidsForBrand,
+  statsFor,
+  withStats,
+} from './community';
 import {
   MAX_IMAGE_BYTES,
   imageId,
@@ -90,10 +100,42 @@ export function startCleanupTimer(): void {
       db.sessions = live;
       void persist();
     }
+
+    void releaseDelayedCampaigns(now);
   }, 60_000);
   timer.unref();
 
   startHeartbeat();
+}
+
+/**
+ * Ptichka muddati tugagan e'lonlarni hammaga ochadi.
+ *
+ * Nega `setTimeout` emas: bepul tarifda server uxlab qolishi yoki qayta
+ * ishga tushishi mumkin — o'shanda taymer yo'qolib, e'lon hech kimga
+ * ochilmay qolardi. Har daqiqalik tekshiruv esa qayta ishga tushgandan
+ * keyin ham ishlayveradi.
+ */
+async function releaseDelayedCampaigns(now: number): Promise<void> {
+  const due = db.campaigns.filter(
+    (campaign) =>
+      campaign.publishedAt &&
+      !campaign.notifiedAllAt &&
+      moderationState(campaign) === 'ok' &&
+      isOpenToEveryone(campaign, now),
+  );
+
+  if (due.length === 0) return;
+
+  for (const campaign of due) {
+    campaign.notifiedAllAt = new Date(now).toISOString();
+    // Endi e'lon hamma uchun ochiq — jonli oqim orqali darhol ko'rinsin.
+    broadcast({ type: 'campaign:new', campaign });
+    void notify.newCampaign(campaign, false);
+  }
+
+  db.campaigns = [...db.campaigns];
+  await persist();
 }
 
 const readLimit = rateLimit(240, 'read');
@@ -346,75 +388,44 @@ function threadParties(threadId: string): { brandId: string; bloggerId: string }
 }
 
 /**
- * Bloger profilini ko'rish huquqi bor profillar ro'yxati.
- *
- * Blogerning o'zi va u bilan allaqachon ish boshlagan brendlar — ya'ni uning
- * arizasini olgan yoki u bilan yozishgan brendlar. Boshqalar uchun bloger
- * umuman mavjud emas.
- */
-function bloggerAudience(bloggerId: string): string[] {
-  const brandIds = new Set<string>();
-
-  for (const bid of db.bids) {
-    if (bid.bloggerId !== bloggerId) continue;
-    const campaign = db.campaigns.find((c) => c.id === bid.campaignId);
-    if (campaign) brandIds.add(campaign.brandId);
-  }
-
-  for (const message of db.messages) {
-    const { brandId, bloggerId: other } = threadParties(message.threadId);
-    if (other === bloggerId) brandIds.add(brandId);
-  }
-
-  return [bloggerId, ...brandIds];
-}
-
-/**
  * Foydalanuvchiga ko'rsatiladigan ma'lumot.
  *
- * Blogerlar katalogi yopiq. Reklama beruvchi blogerlarni ko'rib chiqa olmaydi —
- * u faqat o'z e'loniga ariza yuborgan yoki u bilan yozishgan blogerni ko'radi.
- * Bloger ham boshqa blogerlarni ko'rmaydi, faqat o'z profilini.
+ * Blogerlar katalogi hammaga ochiq. Shaxsiy narsalar esa yopiq: ariza
+ * kontaktlari va yozishmalar faqat ikki tomonga ko'rinadi.
  *
- * Bu cheklov aynan shu yerda — serverda — turishi muhim: aks holda interfeysdan
- * tugmani olib tashlash kifoya qilmaydi va `/api/state` ga to'g'ridan-to'g'ri
- * murojaat qilgan odam butun ro'yxatni olib qo'yaveradi.
- *
- * E'lonlar va ularni joylagan brendlar ochiq qoladi — bozorning mohiyati shu,
- * bloger e'lonni ko'rib o'zi bog'lanadi.
+ * E'lonlarda ikki qatlam filtr bor:
+ *   • moderatsiya — admin yashirgani va bloklangan hisobniki chiqib ketadi;
+ *   • ptichka — yangi e'lonni ptichkasiz bloger 15 daqiqa kechroq ko'radi.
  */
 function visibleState(account: Account) {
-  // Admin yashirgan e'lonlar va bloklangan hisoblarning e'lonlari chiqib
-  // ketadi. E'lon egasi o'zinikini baribir ko'radi — sababi bilan birga.
-  const campaigns = db.campaigns.filter((c) => canSeeCampaign(c, account.profileId));
-  const shared = { brands: db.brands, campaigns };
+  const now = Date.now();
+
+  const moderated = db.campaigns.filter((c) => canSeeCampaign(c, account.profileId));
 
   if (account.role === 'blogger') {
     return {
-      ...shared,
-      bloggers: db.bloggers.filter((b) => b.id === account.profileId),
+      brands: db.brands,
+      // Ptichkasiz bloger yangi e'lonni biroz kechroq ko'radi.
+      campaigns: moderated.filter((c) => canBloggerSeeCampaign(c, account.profileId, now)),
+      bloggers: withStats(db.bloggers),
       bids: db.bids.filter((b) => b.bloggerId === account.profileId),
       messages: db.messages.filter((m) => threadParties(m.threadId).bloggerId === account.profileId),
+      follows: db.follows,
     };
   }
 
   const myCampaigns = new Set(
     db.campaigns.filter((c) => c.brandId === account.profileId).map((c) => c.id),
   );
-  const bids = db.bids.filter((b) => myCampaigns.has(b.campaignId));
-  const messages = db.messages.filter((m) => threadParties(m.threadId).brandId === account.profileId);
-
-  // Ko'rinadigan blogerlar: ariza yuborganlar va yozishganlar.
-  const known = new Set([
-    ...bids.map((b) => b.bloggerId),
-    ...messages.map((m) => threadParties(m.threadId).bloggerId),
-  ]);
 
   return {
-    ...shared,
-    bloggers: db.bloggers.filter((b) => known.has(b.id)),
-    bids,
-    messages,
+    brands: db.brands,
+    campaigns: moderated,
+    bloggers: withStats(db.bloggers),
+    // Arizalar tartibi: ptichkalilar tepada.
+    bids: sortBidsForBrand(db.bids.filter((b) => myCampaigns.has(b.campaignId))),
+    messages: db.messages.filter((m) => threadParties(m.threadId).brandId === account.profileId),
+    follows: db.follows,
   };
 }
 
@@ -489,7 +500,7 @@ api.patch(
     await persist();
 
     // Bloger profili hammaga emas — faqat o'ziga va u bilan ishlagan brendlarga.
-    broadcast({ type: 'blogger:updated', blogger: updated }, bloggerAudience(updated.id));
+    broadcast({ type: 'blogger:updated', blogger: updated });
     res.json(updated);
   }),
 );
@@ -523,6 +534,8 @@ api.post(
       status: 'active',
       bidsCount: 0,
       createdDate: todayLabel(),
+      // Ptichka ustunligi shu vaqtdan hisoblanadi.
+      publishedAt: new Date().toISOString(),
       talkingPoints: strList(body.talkingPoints, { max: 12, itemMax: 200 }),
       hashtags: strList(body.hashtags, { max: 10, itemMax: 40 }),
       contactTelegram: handle(body.contactTelegram, 'Telegram', brand.contactTelegram),
@@ -543,8 +556,19 @@ api.post(
     );
     await persist();
 
-    broadcast({ type: 'campaign:new', campaign });
-    void notify.newCampaign(campaign);
+    /**
+     * Birinchi 15 daqiqa — faqat ptichkalilar uchun.
+     *
+     * Jonli oqim ham shu qoidaga bo'ysunadi: e'lon reklama beruvchilarga
+     * (ular bozorni to'liq ko'radi) va ptichkali blogerlarga yuboriladi.
+     * Qolganlarga `releaseDelayedCampaigns` muddati kelganda yuboradi.
+     */
+    const earlyAudience = [
+      ...db.brands.map((b) => b.id),
+      ...db.bloggers.filter((b) => b.isVerified).map((b) => b.id),
+    ];
+    broadcast({ type: 'campaign:new', campaign }, earlyAudience);
+    void notify.newCampaign(campaign, true);
     res.status(201).json(campaign);
   }),
 );
@@ -581,6 +605,18 @@ api.post(
 
     const campaign = db.campaigns.find((c) => c.id === body.campaignId);
     if (!campaign) throw new HttpError(404, "Bunday e'lon topilmadi");
+
+    // Ko'ra olmaydigan e'longa ariza ham yubora olmaydi: aks holda id'ni
+    // bilgan odam ptichka kutish davrini chetlab o'tardi.
+    if (!canSeeCampaign(campaign, account.profileId)) {
+      throw new HttpError(404, "Bunday e'lon topilmadi");
+    }
+    if (!canBloggerSeeCampaign(campaign, blogger.id)) {
+      throw new HttpError(
+        403,
+        `Bu e'lon hozircha faqat ptichkali blogerlar uchun ochiq. ${minutesUntilOpen(campaign)} daqiqadan keyin siz ham ariza yubora olasiz.`,
+      );
+    }
 
     if (db.bids.some((b) => b.campaignId === campaign.id && b.bloggerId === blogger.id)) {
       throw new HttpError(409, "Siz bu e'longa allaqachon ariza qoldirgansiz");
@@ -637,12 +673,26 @@ api.patch(
       throw new HttpError(403, "Bu arizani faqat e'lon egasi ko'rib chiqa oladi");
     }
 
-    const status = oneOf(req.body?.status, ['pending', 'accepted', 'rejected'] as const, 'pending');
-    const updated: ProposalBid = { ...bid, status };
+    const status = oneOf(
+      req.body?.status,
+      ['pending', 'accepted', 'rejected', 'completed'] as const,
+      'pending',
+    );
+    const updated: ProposalBid = {
+      ...bid,
+      status,
+      // Yakunlangan sana statistikada «oxirgi zakaz» sifatida ishlatiladi.
+      completedAt: status === 'completed' ? (bid.completedAt ?? new Date().toISOString()) : undefined,
+    };
     db.bids = db.bids.map((b) => (b.id === bid.id ? updated : b));
     await persist();
 
     broadcast({ type: 'bid:updated', bid: updated }, [campaign.brandId, bid.bloggerId]);
+
+    // Statistika o'zgardi — blogerning kartasi hamma joyda yangilansin.
+    const blogger = db.bloggers.find((b) => b.id === bid.bloggerId);
+    if (blogger) broadcast({ type: 'blogger:updated', blogger: { ...blogger, stats: statsFor(blogger.id) } });
+
     if (status !== bid.status) void notify.bidStatusChanged(updated);
     res.json(updated);
   }),
@@ -811,12 +861,27 @@ api.get(
         bids: db.bids.length,
         messages: db.messages.length,
         openReports: db.reports.filter((r) => !r.resolvedAt).length,
+        verified: db.bloggers.filter((b) => b.isVerified).length,
+        verificationPending: db.verificationRequests.filter((r) => r.status === 'pending').length,
+        follows: db.follows.length,
         openTickets: db.tickets.filter((t) => t.status === 'open').length,
         liveClients: connectedClients(),
       },
       accounts,
       campaigns,
       reports: db.reports,
+      verificationRequests: db.verificationRequests,
+      // Ptichkali blogerlar — panelda ptichkani olib qo'yish uchun kerak.
+      verifiedBloggers: db.bloggers
+        .filter((b) => b.isVerified)
+        .map((b) => ({
+          id: b.id,
+          name: b.name,
+          username: b.username,
+          avatar: b.avatar,
+          verifiedAt: b.verifiedAt ?? null,
+          themeColor: b.themeColor ?? null,
+        })),
       log: db.adminLog,
     });
   }),
@@ -1033,5 +1098,237 @@ api.post(
     void notify.passwordReset(target, temporary);
 
     res.json({ ok: true, password: temporary });
+  }),
+);
+
+/* ------------------------------------------------------------------ */
+/* Obunalar — bloger blogerga                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Obuna bo'lish yoki bekor qilish. Bir so'rov ikkalasini ham bajaradi:
+ * bosilganda holat teskarisiga o'tadi, shunda mijozda alohida hisob
+ * yuritish shart emas.
+ */
+api.post(
+  '/follows',
+  writeLimit,
+  asyncRoute(async (req, res) => {
+    const account = requireRole(req, 'blogger');
+    const targetId = str((req.body ?? {}).targetId, 'Bloger', { max: 120, required: true });
+
+    if (targetId === account.profileId) throw new HttpError(400, "O'zingizga obuna bo'la olmaysiz");
+
+    const target = db.bloggers.find((b) => b.id === targetId);
+    if (!target) throw new HttpError(404, 'Bunday bloger topilmadi');
+
+    const existing = db.follows.find(
+      (f) => f.followerId === account.profileId && f.targetId === targetId,
+    );
+
+    if (existing) {
+      db.follows = db.follows.filter((f) => f.id !== existing.id);
+    } else {
+      db.follows = [
+        { id: makeId('fol'), followerId: account.profileId, targetId, createdAt: new Date().toISOString() },
+        ...db.follows,
+      ];
+    }
+
+    await persist();
+
+    // Ikkala profilning sanagichi o'zgardi — hammaga yangi holat yuboriladi.
+    for (const id of [targetId, account.profileId]) {
+      const blogger = db.bloggers.find((b) => b.id === id);
+      if (blogger) broadcast({ type: 'blogger:updated', blogger: { ...blogger, stats: statsFor(id) } });
+    }
+
+    if (!existing) {
+      const me = db.bloggers.find((b) => b.id === account.profileId);
+      if (me) void notify.newFollower(target, me);
+    }
+
+    res.json({ following: !existing, followers: statsFor(targetId).followers });
+  }),
+);
+
+/* ------------------------------------------------------------------ */
+/* Ptichka (rasmiy tasdiq belgisi)                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Bloger ptichka so'raydi. To'lov kod ichida emas — admin uni tashqarida
+ * olib, panelda tasdiqlaydi. Shuning uchun bu shunchaki so'rov yozuvi.
+ */
+api.post(
+  '/verification/request',
+  writeLimit,
+  asyncRoute(async (req, res) => {
+    const account = requireRole(req, 'blogger');
+    const blogger = db.bloggers.find((b) => b.id === account.profileId);
+    if (!blogger) throw new HttpError(404, 'Profil topilmadi');
+
+    if (blogger.isVerified) throw new HttpError(409, 'Sizda ptichka allaqachon bor');
+
+    const pending = db.verificationRequests.find(
+      (r) => r.bloggerId === blogger.id && r.status === 'pending',
+    );
+    if (pending) throw new HttpError(409, "So'rovingiz ko'rib chiqilmoqda, biroz kuting");
+
+    const request: VerificationRequest = {
+      id: makeId('ver'),
+      bloggerId: blogger.id,
+      bloggerName: blogger.name,
+      bloggerUsername: blogger.username,
+      phone: blogger.phone,
+      contactTelegram: blogger.contactTelegram,
+      note: str((req.body ?? {}).note, 'Izoh', { max: 500 }) || undefined,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+
+    db.verificationRequests = [request, ...db.verificationRequests].slice(0, 2000);
+    await persist();
+
+    void notify.newVerificationRequest(request);
+    res.status(201).json(request);
+  }),
+);
+
+/** Blogerning o'z so'rovi qay holatda — tugmani to'g'ri ko'rsatish uchun. */
+api.get(
+  '/verification/mine',
+  readLimit,
+  asyncRoute(async (req, res) => {
+    const account = requireAccount(req);
+    const latest = db.verificationRequests.find((r) => r.bloggerId === account.profileId);
+    res.json({ request: latest ?? null, price: process.env.VERIFICATION_PRICE ?? null });
+  }),
+);
+
+/**
+ * Profil rangini o'zgartirish — faqat ptichkali blogerga.
+ *
+ * Rang profilning bir qismi, shuning uchun uni hamma ko'radi.
+ */
+api.patch(
+  '/verification/color',
+  writeLimit,
+  asyncRoute(async (req, res) => {
+    const account = requireRole(req, 'blogger');
+    const blogger = db.bloggers.find((b) => b.id === account.profileId);
+    if (!blogger) throw new HttpError(404, 'Profil topilmadi');
+
+    if (!blogger.isVerified) {
+      throw new HttpError(403, 'Rangni faqat ptichkali blogerlar o‘zgartira oladi');
+    }
+
+    const raw = (req.body ?? {}).color;
+    // Bo'sh qiymat — rangdan voz kechish.
+    const color = raw === null || raw === '' ? null : normalizeThemeColor(raw);
+    if (raw !== null && raw !== '' && color === null) {
+      throw new HttpError(400, 'Rang #RRGGBB ko‘rinishida va yetarlicha to‘q bo‘lishi kerak');
+    }
+
+    blogger.themeColor = color ?? undefined;
+    db.bloggers = db.bloggers.map((b) => (b.id === blogger.id ? blogger : b));
+    await persist();
+
+    broadcast({ type: 'blogger:updated', blogger: { ...blogger, stats: statsFor(blogger.id) } });
+    res.json({ ok: true, themeColor: blogger.themeColor ?? null });
+  }),
+);
+
+/* ---------- Admin: ptichka boshqaruvi ---------- */
+
+/** So'rovni tasdiqlash yoki rad etish. */
+api.patch(
+  '/admin/verification/requests/:id',
+  writeLimit,
+  asyncRoute(async (req, res) => {
+    const admin = requireAdmin(req);
+    const request = db.verificationRequests.find((r) => r.id === req.params.id);
+    if (!request) throw new HttpError(404, "Bunday so'rov topilmadi");
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const decision = oneOf(body.decision, ['approved', 'rejected'] as const, 'rejected');
+    const note = str(body.note, 'Izoh', { max: 500 });
+
+    request.status = decision;
+    request.decidedAt = new Date().toISOString();
+    request.decidedBy = admin.id;
+    request.decisionNote = note || undefined;
+    db.verificationRequests = db.verificationRequests.map((r) => (r.id === request.id ? request : r));
+
+    const blogger = db.bloggers.find((b) => b.id === request.bloggerId);
+    if (decision === 'approved' && blogger) {
+      blogger.isVerified = true;
+      blogger.verifiedAt = new Date().toISOString();
+      blogger.verifiedBy = admin.id;
+      db.bloggers = db.bloggers.map((b) => (b.id === blogger.id ? blogger : b));
+    }
+
+    logAction({
+      admin,
+      action: decision === 'approved' ? 'Ptichka berildi' : "Ptichka so'rovi rad etildi",
+      targetType: 'account',
+      targetId: request.bloggerId,
+      targetLabel: `${request.bloggerName} (@${request.bloggerUsername})`,
+      reason: note || undefined,
+    });
+
+    await persist();
+
+    if (blogger) broadcast({ type: 'blogger:updated', blogger: { ...blogger, stats: statsFor(blogger.id) } });
+    void notify.verificationDecision(request, decision, note);
+
+    res.json({ ok: true, status: decision });
+  }),
+);
+
+/**
+ * Ptichkani to'g'ridan-to'g'ri berish yoki olib qo'yish — so'rovsiz ham.
+ * Olib qo'yilganda tanlangan rang ham bekor qilinadi, chunki rang
+ * ptichkaning bir qismi.
+ */
+api.patch(
+  '/admin/verification/:bloggerId',
+  writeLimit,
+  asyncRoute(async (req, res) => {
+    const admin = requireAdmin(req);
+    const blogger = db.bloggers.find((b) => b.id === req.params.bloggerId);
+    if (!blogger) throw new HttpError(404, 'Bunday bloger topilmadi');
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const action = oneOf(body.action, ['grant', 'revoke'] as const, 'grant');
+    const reason = str(body.reason, 'Sabab', { max: 500 });
+
+    if (action === 'grant') {
+      blogger.isVerified = true;
+      blogger.verifiedAt = new Date().toISOString();
+      blogger.verifiedBy = admin.id;
+    } else {
+      blogger.isVerified = false;
+      blogger.verifiedAt = undefined;
+      blogger.verifiedBy = undefined;
+      blogger.themeColor = undefined;
+    }
+    db.bloggers = db.bloggers.map((b) => (b.id === blogger.id ? blogger : b));
+
+    logAction({
+      admin,
+      action: action === 'grant' ? 'Ptichka berildi' : 'Ptichka olib qo‘yildi',
+      targetType: 'account',
+      targetId: blogger.id,
+      targetLabel: `${blogger.name} (@${blogger.username})`,
+      reason: reason || undefined,
+    });
+
+    await persist();
+
+    broadcast({ type: 'blogger:updated', blogger: { ...blogger, stats: statsFor(blogger.id) } });
+    void notify.verificationChanged(blogger, action === 'grant', reason);
+
+    res.json({ ok: true, isVerified: blogger.isVerified });
   }),
 );

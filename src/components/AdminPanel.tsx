@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  BadgeCheck,
   Ban,
   CheckCircle2,
   Eye,
@@ -23,7 +24,7 @@ interface AdminPanelProps {
   onToast: (kind: 'success' | 'error', text: string) => void;
 }
 
-type Section = 'overview' | 'accounts' | 'campaigns' | 'reports' | 'log';
+type Section = 'overview' | 'accounts' | 'campaigns' | 'reports' | 'verified' | 'log';
 
 /** Amalni bajarishdan oldin so'raladigan sabab oynasi. */
 interface Pending {
@@ -39,6 +40,7 @@ const SECTIONS: { id: Section; label: string; Icon: typeof Users }[] = [
   { id: 'accounts', label: 'Hisoblar', Icon: Users },
   { id: 'campaigns', label: "E'lonlar", Icon: Eye },
   { id: 'reports', label: 'Shikoyatlar', Icon: Flag },
+  { id: 'verified', label: 'Ptichka', Icon: BadgeCheck },
   { id: 'log', label: 'Kuzatuv', Icon: History },
 ];
 
@@ -221,6 +223,7 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
   }
 
   const openReports = data.reports.filter((report) => !report.resolvedAt);
+  const pendingVerifications = data.verificationRequests.filter((r) => r.status === 'pending');
 
   return (
     <div className="space-y-5">
@@ -241,7 +244,13 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {SECTIONS.map(({ id, label, Icon }) => {
           const count =
-            id === 'reports' ? openReports.length : id === 'accounts' ? data.accounts.length : 0;
+            id === 'reports'
+              ? openReports.length
+              : id === 'verified'
+                ? pendingVerifications.length
+                : id === 'accounts'
+                  ? data.accounts.length
+                  : 0;
           return (
             <button
               key={id}
@@ -260,7 +269,11 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
               {count > 0 && (
                 <span
                   className={`text-[10px] px-1.5 py-0.5 rounded-md font-black ${
-                    id === 'reports' ? 'bg-rose-500 text-white' : 'bg-purple-100 text-purple-900'
+                    id === 'reports'
+                      ? 'bg-rose-500 text-white'
+                      : id === 'verified'
+                        ? 'bg-violet-600 text-white'
+                        : 'bg-purple-100 text-purple-900'
                   }`}
                 >
                   {count}
@@ -296,6 +309,9 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
             { label: 'Xabarlar', value: data.stats.messages, tone: 'violet' },
             { label: 'Ochiq shikoyat', value: data.stats.openReports, tone: 'rose' },
             { label: 'Ochiq murojaat', value: data.stats.openTickets, tone: 'rose' },
+            { label: 'Ptichkali', value: data.stats.verified, tone: 'violet' },
+            { label: 'Ptichka so‘rovi', value: data.stats.verificationPending, tone: 'amber' },
+            { label: 'Obunalar', value: data.stats.follows, tone: 'violet' },
           ].map((card) => (
             <div
               key={card.label}
@@ -640,6 +656,138 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ---------- Ptichka ---------- */}
+      {section === 'verified' && (
+        <div className="space-y-5">
+          <div>
+            <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-2">
+              Kutayotgan so'rovlar ({pendingVerifications.length})
+            </h3>
+
+            {pendingVerifications.length === 0 ? (
+              <p className="text-sm text-slate-500 font-semibold bg-white border border-purple-100 rounded-2xl p-5 text-center">
+                Yangi so'rov yo'q.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {pendingVerifications.map((request) => (
+                  <div key={request.id} className="bg-white border border-violet-200 rounded-2xl p-4">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <BadgeCheck className="w-4 h-4 text-violet-600" aria-hidden="true" />
+                      <h4 className="text-sm font-black text-slate-900">{request.bloggerName}</h4>
+                      <span className="text-[11px] font-bold text-slate-500">
+                        @{request.bloggerUsername}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 font-semibold mt-1 tabular-nums">
+                      {request.phone ?? 'telefon yo‘q'} · {formatDate(request.createdAt)}
+                    </p>
+                    {request.note && <p className="text-xs text-slate-600 mt-1.5">{request.note}</p>}
+
+                    <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-purple-50">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void perform(async () => {
+                            await api.adminDecideVerification(request.id, 'approved');
+                            return `${request.bloggerName} — ptichka berildi`;
+                          })
+                        }
+                        className="flex items-center gap-1.5 text-[11px] font-black px-3 py-2 rounded-xl bg-violet-600 text-white hover:bg-violet-700 transition cursor-pointer"
+                      >
+                        <BadgeCheck className="w-3.5 h-3.5" aria-hidden="true" />
+                        To'lov qabul qilindi — ptichka bering
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          ask({
+                            title: "So'rovni rad etish",
+                            hint: `«${request.bloggerName}» ga sabab bilan xabar boradi.`,
+                            reasonRequired: false,
+                            run: (text) =>
+                              perform(async () => {
+                                await api.adminDecideVerification(request.id, 'rejected', text);
+                                return "So'rov rad etildi";
+                              }),
+                          })
+                        }
+                        className="flex items-center gap-1.5 text-[11px] font-black px-3 py-2 rounded-xl bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 transition cursor-pointer"
+                      >
+                        Rad etish
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-2">
+              Ptichkali blogerlar ({data.verifiedBloggers.length})
+            </h3>
+
+            {data.verifiedBloggers.length === 0 ? (
+              <p className="text-sm text-slate-500 font-semibold bg-white border border-purple-100 rounded-2xl p-5 text-center">
+                Hozircha ptichkali bloger yo'q.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {data.verifiedBloggers.map((row) => (
+                  <div
+                    key={row.id}
+                    className="bg-white border rounded-2xl p-4 flex items-center gap-3 flex-wrap"
+                    style={{ borderColor: `${row.themeColor ?? '#7c3aed'}59` }}
+                  >
+                    <img
+                      src={row.avatar}
+                      alt=""
+                      className="w-10 h-10 rounded-2xl object-cover border border-purple-100 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-sm font-black text-slate-900 truncate">{row.name}</h4>
+                        <BadgeCheck
+                          className="w-3.5 h-3.5 shrink-0"
+                          style={{ color: row.themeColor ?? '#7c3aed' }}
+                          aria-hidden="true"
+                        />
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-semibold">
+                        @{row.username} · {formatDate(row.verifiedAt)}
+                        {row.themeColor ? ` · ${row.themeColor}` : ''}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        ask({
+                          title: "Ptichkani olib qo'yish",
+                          hint: `«${row.name}» ptichkadan va tanlagan rangidan mahrum bo'ladi. Unga Telegram orqali xabar boradi.`,
+                          reasonRequired: false,
+                          run: (text) =>
+                            perform(async () => {
+                              await api.adminSetVerification(row.id, 'revoke', text);
+                              return "Ptichka olib qo'yildi";
+                            }),
+                        })
+                      }
+                      className="text-[11px] font-black px-3 py-2 rounded-xl bg-rose-50 text-rose-900 border border-rose-200 hover:bg-rose-100 transition cursor-pointer"
+                    >
+                      Olib qo'yish
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -25,7 +25,9 @@ export type PlatformEvent =
   | { type: 'bid:updated'; bid: ProposalBid }
   | { type: 'message:new'; message: ChatMessage }
   | { type: 'blogger:updated'; blogger: BloggerProfile }
-  | { type: 'brand:updated'; brand: BrandProfile };
+  | { type: 'brand:updated'; brand: BrandProfile }
+  /** Obuna qo'shildi yoki bekor qilindi — ikkala tomonning sanagichi o'zgaradi. */
+  | { type: 'follow:changed'; followerId: string; targetId: string; following: boolean };
 
 interface Client {
   id: number;

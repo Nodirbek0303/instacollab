@@ -7,6 +7,7 @@ import {
   Instagram,
   PlusCircle,
   ShieldCheck,
+  Users,
   UserCheck,
   X,
 } from 'lucide-react';
@@ -82,7 +83,7 @@ export function Sidebar({
           <div className="flex items-center justify-between mb-4">
             <button
               type="button"
-              onClick={() => handleNavClick('campaigns')}
+              onClick={() => handleNavClick(isAdvertiser ? 'bloggers' : 'campaigns')}
               className="flex items-center gap-3 cursor-pointer group select-none text-left"
             >
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-pink-500 via-rose-500 to-amber-400 flex items-center justify-center text-white shadow-md shadow-pink-500/25 group-hover:scale-105 transition-transform duration-200">
@@ -183,6 +184,25 @@ export function Sidebar({
 
               <button
                 type="button"
+                id="sidebar-nav-bloggers"
+                aria-current={activeTab === 'bloggers' ? 'page' : undefined}
+                onClick={() => handleNavClick('bloggers')}
+                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-xs font-bold transition cursor-pointer ${navClass('bloggers', 'violet')}`}
+              >
+                <span className="flex items-center gap-2.5">
+                  <Users
+                    className={`w-4 h-4 ${activeTab === 'bloggers' ? 'text-violet-600' : 'text-slate-400'}`}
+                    aria-hidden="true"
+                  />
+                  <span>Blogerlar Katalogi</span>
+                </span>
+                <span className="bg-purple-200/60 text-purple-900 text-[10px] px-1.5 py-0.5 rounded-md font-black">
+                  Katalog
+                </span>
+              </button>
+
+              <button
+                type="button"
                 id="sidebar-nav-campaigns"
                 aria-current={activeTab === 'campaigns' ? 'page' : undefined}
                 onClick={() => handleNavClick('campaigns')}
@@ -246,6 +266,23 @@ export function Sidebar({
                 >
                   Bozor
                 </span>
+              </button>
+
+              <button
+                type="button"
+                id="sidebar-nav-blogger-community"
+                aria-current={activeTab === 'bloggers' ? 'page' : undefined}
+                onClick={() => handleNavClick('bloggers')}
+                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-xs font-bold transition cursor-pointer ${navClass('bloggers', 'pink')}`}
+              >
+                <span className="flex items-center gap-2.5">
+                  <Users
+                    className={`w-4 h-4 ${activeTab === 'bloggers' ? 'text-pink-600' : 'text-slate-400'}`}
+                    aria-hidden="true"
+                  />
+                  <span>Blogerlar Hamjamiyati</span>
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-pink-400" aria-hidden="true" />
               </button>
 
               <button
