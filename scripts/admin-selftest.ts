@@ -52,7 +52,7 @@ async function main(): Promise<void> {
 
   console.log('\n1. Kim admin panelini ocha oladi');
 
-  check('admin huquqi tan olindi', (await admin.get('/admin/me')).data.isAdmin === true);
+  check('ro‘yxatdagi raqam admin', (await admin.get('/admin/me')).data.isAdmin === true);
   check('oddiy foydalanuvchida huquq yo‘q', (await brand.get('/admin/me')).data.isAdmin === false);
   check('oddiy foydalanuvchiga panel yopiq (403)', (await brand.get('/admin/overview')).status === 403);
   check('blogerga ham yopiq (403)', (await blogger.get('/admin/overview')).status === 403);
@@ -179,6 +179,14 @@ async function main(): Promise<void> {
 
   const fakeCampaign = await admin.patch('/admin/campaigns/yoq-bunday-id', { action: 'hide' });
   check('mavjud bo‘lmagan e‘lon uchun 404', fakeCampaign.status === 404, fakeCampaign.status);
+
+  // Ro'yxatda bo'lmagan hisob hech qanday yo'l bilan panelga kira olmasligi kerak.
+  check('boshqa hisob shikoyatni yopa olmaydi', (await brand.patch('/admin/reports/xxx', { outcome: 'rejected' })).status === 403);
+  check('boshqa hisob e‘lonni yashira olmaydi', (await brand.patch('/admin/campaigns/xxx', { action: 'hide' })).status === 403);
+  check(
+    'boshqa hisob parol tiklay olmaydi',
+    (await brand.post(`/admin/accounts/${adminAccountId}/reset-password`)).status === 403,
+  );
 
   console.log('\n9. Parolni tiklash');
 

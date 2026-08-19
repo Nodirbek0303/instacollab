@@ -33,12 +33,12 @@ import {
   accountByProfileId,
   accountByTelegramId,
   db,
-  isSupportAdmin,
   makeId,
   persist,
   profileOf,
 } from './db';
 import { createAccount, generateTempPassword, hashPassword, revokeAllSessions } from './auth';
+import { adminPhones, isAdminTelegramId } from './admin';
 import { normalizePhone, prettyPhone, str } from './validate';
 
 /* ------------------------------------------------------------------ */
@@ -454,7 +454,7 @@ interface Viewer {
 }
 
 function viewerOf(telegramId: number): Viewer {
-  return { account: accountByTelegramId(telegramId) ?? null, isSupport: isSupportAdmin(telegramId) };
+  return { account: accountByTelegramId(telegramId) ?? null, isSupport: isAdminTelegramId(telegramId) };
 }
 
 async function showMainMenu(chatId: number, viewer: Viewer): Promise<void> {
@@ -984,6 +984,28 @@ async function handleMessage(message: TgMessage): Promise<void> {
       await send(chatId, '❌ Kod noto‘g‘ri.');
       return;
     }
+
+    // Ro'yxat `.env` da belgilangan bo'lsa, kodning o'zi yetarli emas —
+    // faqat o'sha telefon raqamiga ulangan hisob admin bo'la oladi.
+    const allowed = adminPhones();
+    if (allowed.length > 0) {
+      const account = accountByTelegramId(from.id);
+      if (!account) {
+        await send(
+          chatId,
+          '❌ Avval hisobingizni botga ulang — «🔗 Mavjud hisobni ulash» tugmasi orqali.',
+        );
+        return;
+      }
+      if (!allowed.includes(account.phone)) {
+        await send(
+          chatId,
+          '❌ Admin huquqi faqat oldindan belgilangan telefon raqamlariga beriladi.',
+        );
+        return;
+      }
+    }
+
     if (!db.supportAdmins.includes(from.id)) {
       db.supportAdmins = [...db.supportAdmins, from.id];
       await persist();

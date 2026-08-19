@@ -224,25 +224,21 @@ foydalaning — u ilovaning o'zi orqali ishlagani uchun bunday muammo bo'lmaydi.
 
 ## Administrator huquqini berish
 
-Ikki yo'ldan biri:
-
-**Bot orqali.** Render'dagi `ADMIN_SETUP_CODE` qiymatini oling va botga yozing:
-
-```
-/admin SIZNING_KODINGIZ
-```
-
-**Muhit o'zgaruvchisi orqali** (Telegram ulanmagan bo'lsa ham ishlaydi). Render → Environment →
-`ADMIN_PHONES` qo'shing:
+Render → Environment → `ADMIN_PHONES`:
 
 ```
 ADMIN_PHONES=+998901234567
 ```
 
 Bir nechta raqamni vergul bilan ajrating. O'zgartirgandan keyin **«Deploy latest commit»** qiling —
-faqat o'zgaruvchini saqlash yetarli emas.
+faqat o'zgaruvchini saqlash yetarli emas, xizmat qayta ishga tushishi kerak.
 
-Shundan keyin o'sha hisob bilan panelga kirsangiz, yon menyuda «Administrator Paneli» chiqadi.
+Shu ro'yxatdagi raqam bilan kirsangiz, yon menyuda «Administrator Paneli» chiqadi. Boshqalarga u
+umuman ko'rinmaydi va API darajasida ham yopiq.
+
+**Ro'yxatdan chiqarish.** Raqamni `ADMIN_PHONES` dan olib tashlab qayta joylang — server ishga
+tushishida huquqni bazadan ham olib qo'yadi. Jurnalda `[admin] ruxsat etilgan raqamlar: …` degan
+qator chiqadi, shundan tekshirib olasiz.
 
 ## Ishga tushish tartibi
 

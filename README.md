@@ -240,12 +240,24 @@ platformaning to'liq manzarasi va nazorat vositalari bor.
 
 ### Kim admin bo'ladi
 
-Ikki yo'l bor va ikkalasi ham ishlaydi:
+Ro'yxat **`.env` dagi `ADMIN_PHONES`** orqali belgilanadi:
 
-1. **Bot orqali** — `.env` dagi `ADMIN_SETUP_CODE` bilan botga `/admin KOD` deb yoziladi.
-   Shu Telegram hisobiga ulangan akkaunt veb-panelda ham admin bo'ladi.
-2. **`.env` orqali** — `ADMIN_PHONES=+998901234567,+998907654321`. Telegram ulanmagan bo'lsa
-   ham egasi panelga kira oladi. Bu zaxira yo'l: bot ishlamay qolsa nazorat yopilib qolmaydi.
+```
+ADMIN_PHONES=+998901234567
+```
+
+Bir nechta raqamni vergul bilan ajrating. Raqam qaysi ko'rinishda yozilishi muhim emas —
+`901234567`, `998901234567`, `+998 90 123-45-67` bir xil tushuniladi.
+
+**Ro'yxat berilgan bo'lsa, faqat o'sha raqamlar admin bo'ladi va boshqa hech qanday yo'l
+ishlamaydi.** Botdagi `/admin KOD` ham ro'yxatdan tashqaridagi odamga huquq bermaydi — kodni
+bilib olgan bo'lsa ham. Bu ataylab qattiq: nazorat bitta joydan boshqariladi.
+
+Ro'yxat o'zgartirilsa, server keyingi ishga tushishida uni bazaga ham qo'llaydi — ilgari huquq
+olgan begona hisoblar avtomatik tushib qoladi, bazani qo'lda tahrirlash kerak emas.
+
+`ADMIN_PHONES` umuman berilmagan bo'lsa, eski tartib ishlaydi: botga `/admin KOD` yozgan
+birinchi odam admin bo'ladi (`ADMIN_SETUP_CODE`). Bu faqat yangi o'rnatishlar uchun.
 
 ### Nima qila oladi
 
@@ -309,7 +321,7 @@ uzmasligi uchun har 25 soniyada bo'sh signal yuboriladi. Ilova fondan qaytganda
 | `APP_URL` | Ilova manzili. `https://` bo'lsa Telegram Mini App yoqiladi |
 | `PORT` | Server porti (standart 3000) |
 | `DATA_DIR` | Ma'lumotlar katalogi (fayl rejimida) |
-| `ADMIN_PHONES` | Vergul bilan ajratilgan telefon raqamlari — shu hisoblar admin bo'ladi |
+| `ADMIN_PHONES` | Vergul bilan ajratilgan telefon raqamlari — **faqat** shu hisoblar admin bo'ladi |
 | `DATABASE_URL` | Postgres manzili. Berilsa — ma'lumotlar shu yerda saqlanadi |
 | `BOT_MODE` | `polling` deb yozilsa, HTTPS bo'lsa ham long polling ishlatiladi |
 | `HOST` | Ilova qaysi manzilda tinglaydi (proksi ortida `127.0.0.1`) |

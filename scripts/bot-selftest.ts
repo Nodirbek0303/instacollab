@@ -152,6 +152,7 @@ async function main(): Promise<void> {
   const { startBot, stopBot, notify } = await import('../src/server/bot');
   const { db, initDatabase } = await import('../src/server/db');
   const { createAccount } = await import('../src/server/auth');
+  const { isAdminTelegramId, syncSupportAdmins } = await import('../src/server/admin');
 
   await initDatabase();
   await startBot();
@@ -269,6 +270,52 @@ async function main(): Promise<void> {
   await settle();
   check('admin tayinlandi', db.supportAdmins.includes(ADMIN));
   check('support menyusi', lastText(ADMIN).includes('support admin'), lastText(ADMIN));
+
+  console.log('\n6b. ADMIN_PHONES belgilanganda kodning o‘zi yetarli emas');
+  {
+    // Ro'yxat berilgach, faqat o'sha raqamga ulangan hisob admin bo'la oladi.
+    process.env.ADMIN_PHONES = '+998900000001';
+
+    const OUTSIDER = 555003;
+    const outsider = { id: OUTSIDER, first_name: 'Begona', username: 'begona' };
+    sent.length = 0;
+    pushMessage('/admin TESTCODE', OUTSIDER, outsider);
+    await settle();
+    check(
+      'ulanmagan begona rad etildi',
+      lastText(OUTSIDER).includes('hisobingizni botga ulang'),
+      lastText(OUTSIDER),
+    );
+    check('begona ro‘yxatga qo‘shilmadi', !db.supportAdmins.includes(OUTSIDER));
+
+    // Botga ulangan, lekin ro'yxatda yo'q hisob ham o'ta olmasligi kerak.
+    const linked = db.accounts.find((account) => account.telegramId != null);
+    if (linked) {
+      sent.length = 0;
+      pushMessage('/admin TESTCODE', linked.telegramId!, {
+        id: linked.telegramId!,
+        first_name: 'Ulangan',
+        username: 'ulangan',
+      });
+      await settle();
+      check(
+        'ro‘yxatda yo‘q hisob rad etildi',
+        lastText(linked.telegramId!).includes('oldindan belgilangan telefon'),
+        lastText(linked.telegramId!),
+      );
+      check('u ham ro‘yxatga qo‘shilmadi', !db.supportAdmins.includes(linked.telegramId!));
+    }
+
+    // Ro'yxat kuchga kirgach, ilgari kod bilan tayinlangan admin huquqdan mahrum bo'ladi.
+    check('eski admin endi huquqsiz', isAdminTelegramId(ADMIN) === false);
+
+    const { kept } = syncSupportAdmins();
+    check('tozalashdan keyin ro‘yxat bo‘shadi', kept === 0 && db.supportAdmins.length === 0);
+
+    // Sinovning qolgan qismi eski tartibda davom etsin.
+    delete process.env.ADMIN_PHONES;
+    db.supportAdmins = [ADMIN];
+  }
 
   console.log('\n7. Parolni unutgan — Telegramga ulangan foydalanuvchi darhol oladi');
   const oldHash = created?.passwordHash;

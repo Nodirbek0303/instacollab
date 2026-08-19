@@ -10,6 +10,7 @@ import { hashPassword } from './src/server/auth';
 import { api, startCleanupTimer } from './src/server/api';
 import { handleUpdate, startBot, stopBot, webhookPath } from './src/server/bot';
 import { HttpError, normalizePhone } from './src/server/validate';
+import { adminPhones, syncSupportAdmins } from './src/server/admin';
 
 const PORT = Number(process.env.PORT) || 3000;
 /**
@@ -179,6 +180,22 @@ async function startServer() {
   console.log(`Ma'lumotlar: ${store.kind} (${store.location})`);
 
   await ensureDemoAccounts();
+
+  /**
+   * Admin ro'yxatini `.env` bilan moslaymiz. `ADMIN_PHONES` o'zgartirilsa,
+   * eski adminlar shu yerda huquqdan mahrum bo'ladi — bazani qo'lda
+   * tahrirlash kerak emas.
+   */
+  const allowed = adminPhones();
+  if (allowed.length > 0) {
+    const before = db.supportAdmins.length;
+    const { kept } = syncSupportAdmins();
+    if (before !== kept) await persist();
+    console.log(`[admin] ruxsat etilgan raqamlar: ${allowed.join(', ')} (botga ulangan: ${kept})`);
+  } else {
+    console.log('[admin] ADMIN_PHONES berilmagan — adminlar botdagi /admin kodi orqali tayinlanadi.');
+  }
+
   startCleanupTimer();
 
   // Bot ishga tushadi: HTTPS bo'lsa webhook, aks holda long polling.
