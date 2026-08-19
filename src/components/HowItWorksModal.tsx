@@ -46,7 +46,7 @@ export function HowItWorksModal({ isOpen, onClose }: HowItWorksModalProps) {
           <li className="flex gap-2">
             <span className="font-extrabold text-pink-600 shrink-0">2-qadam:</span>
             <span>
-              <strong>Ariza yuboring:</strong> «Reklamalarni tanlash» bo'limida brendlar e'lonlarini ko'rib, o'z
+              <strong>Ariza yuboring:</strong> «Reklamalar Bozori» bo'limida brendlar e'lonlarini ko'rib, o'z
               taklifingizni yuboring. E'londagi minimal obunachi talabiga javob berishingiz kerak.
             </span>
           </li>
@@ -77,20 +77,23 @@ export function HowItWorksModal({ isOpen, onClose }: HowItWorksModalProps) {
           <li className="flex gap-2">
             <span className="font-extrabold text-purple-900 shrink-0">1-qadam:</span>
             <span>
-              Katalogdan mahsulotingizga mos yo'nalish, shahar va auditoriyaga ega blogerlarni saralang — yoki reklama
-              e'loni joylab, arizalarni kuting.
+              <strong>Reklama e'loni joylang:</strong> yo'nalish, byudjet va blogerga qo'yiladigan talablarni
+              ko'rsating. E'lon barcha blogerlarga ko'rinadi.
             </span>
           </li>
           <li className="flex gap-2">
             <span className="font-extrabold text-purple-900 shrink-0">2-qadam:</span>
             <span>
-              Yoqqan blogerga to'g'ridan-to'g'ri yozing: sayt chati, Telegram yoki telefon. Media kitida uning
-              statistikasi va tariflari ko'rsatilgan.
+              <strong>Arizalarni kuting:</strong> qiziqqan blogerlar o'zlari murojaat qiladi. Har bir arizada
+              blogerning obunachilar soni, taklif qilgan narxi va aloqa ma'lumotlari bo'ladi.
             </span>
           </li>
           <li className="flex gap-2">
             <span className="font-extrabold text-purple-900 shrink-0">3-qadam:</span>
-            <span>Kelgan arizalarni ko'rib chiqib, mos blogerni «Tasdiqlash» tugmasi bilan tanlaysiz.</span>
+            <span>
+              Mos blogerni «Tasdiqlash» tugmasi bilan tanlab, u bilan sayt chati, Telegram yoki telefon orqali
+              bevosita kelishasiz.
+            </span>
           </li>
         </ol>
       </section>

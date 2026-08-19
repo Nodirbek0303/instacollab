@@ -1,4 +1,4 @@
-import { Briefcase, ChevronDown, FileText, Menu, Plus, Users } from 'lucide-react';
+import { Briefcase, ChevronDown, FileText, Menu, Plus } from 'lucide-react';
 
 import type { BloggerProfile, BrandProfile, UserRole } from '../types';
 
@@ -16,13 +16,11 @@ interface TopHeaderProps {
 
 const TITLES: Record<UserRole, Record<string, string>> = {
   advertiser: {
-    bloggers: 'Instagram Blogerlari Katalogi',
     campaigns: "Reklama E'lonlarim & Kelgan Arizalar",
     profile: 'Brend Profilim',
   },
   blogger: {
     campaigns: "Brendlarning Reklama E'lonlari (Tanlash)",
-    bloggers: 'Barcha Blogerlar Hamjamiyati',
     profile: 'Mening Profilim & Media Kit',
   },
 };
@@ -50,13 +48,11 @@ export function TopHeader({
 
   const tabs = isAdvertiser
     ? [
-        { id: 'bloggers', label: 'Blogerlar Katalogi', Icon: Users },
         { id: 'campaigns', label: "Mening E'lonlarim", Icon: Briefcase },
         { id: 'profile', label: 'Brend Profilim', Icon: FileText },
       ]
     : [
         { id: 'campaigns', label: 'Reklamalar Bozori', Icon: Briefcase },
-        { id: 'bloggers', label: 'Blogerlar', Icon: Users },
         { id: 'profile', label: 'Media Kit', Icon: FileText },
       ];
 

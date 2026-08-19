@@ -16,7 +16,12 @@ import type { BloggerProfile, BrandProfile, Campaign, ChatMessage, ProposalBid }
 export type PlatformEvent =
   | { type: 'campaign:new'; campaign: Campaign }
   | { type: 'campaign:deleted'; campaignId: string }
-  | { type: 'bid:new'; bid: ProposalBid; campaignId: string; bidsCount: number }
+  /**
+   * `blogger` — ariza yuborgan blogerning profili. E'lon egasi blogerlar
+   * katalogini ko'rmaydi, shuning uchun profil aynan shu yerda yetkaziladi:
+   * usiz u ariza egasi bilan yozisha olmasdi.
+   */
+  | { type: 'bid:new'; bid: ProposalBid; campaignId: string; bidsCount: number; blogger: BloggerProfile }
   | { type: 'bid:updated'; bid: ProposalBid }
   | { type: 'message:new'; message: ChatMessage }
   | { type: 'blogger:updated'; blogger: BloggerProfile }

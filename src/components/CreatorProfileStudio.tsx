@@ -101,7 +101,7 @@ export function CreatorProfileStudio({ profile, onUpdateProfile }: CreatorProfil
           className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs font-bold px-4 py-3 rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center gap-2"
         >
           <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
-          Media kit saqlandi — o'zgarishlar katalogda va arizalaringizda ham yangilandi.
+          Media kit saqlandi — o'zgarishlar yuborgan arizalaringizda ham yangilandi.
         </p>
       )}
 
@@ -119,7 +119,7 @@ export function CreatorProfileStudio({ profile, onUpdateProfile }: CreatorProfil
               onChange={(url) => update('avatar', url)}
               label="Profil surati"
               alt={`${formData.name} profil rasmi`}
-              hint="Brendlar sizni katalogda shu surat bilan ko'radi. JPG, PNG yoki WEBP."
+              hint="Ariza yuborganingizda brend sizni shu surat bilan ko'radi. JPG, PNG yoki WEBP."
               shape="circle"
             />
 

@@ -176,7 +176,7 @@ export function BrandProfileStudio({ profile, onUpdateProfile }: BrandProfileStu
               onChange={(url) => update('logo', url)}
               label="Brend logotipi"
               alt={`${formData.name} logotipi`}
-              hint="Logotip e'lonlaringizda va katalogda ko'rinadi. JPG, PNG yoki WEBP."
+              hint="Logotip reklama e'lonlaringizda ko'rinadi. JPG, PNG yoki WEBP."
               shape="rounded"
             />
           </fieldset>

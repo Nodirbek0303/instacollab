@@ -272,7 +272,7 @@ export function AuthScreen({
                         Parolni unutdingizmi? Telegram bot yordam beradi
                       </span>
                       <span className="block text-[11px] text-sky-800/80">
-                        {config.telegramBot} — parolni tiklash, katalog va bildirishnomalar
+                        {config.telegramBot} — parolni tiklash, e'lonlar va bildirishnomalar
                       </span>
                     </span>
                   </a>
@@ -280,7 +280,7 @@ export function AuthScreen({
 
                 {config?.demoMode && (
                   <div className="text-[11px] text-slate-500 bg-purple-50/70 border border-purple-100 rounded-2xl p-3 leading-relaxed">
-                    <strong className="text-purple-900">Sinov uchun demo hisoblar:</strong> katalogdagi istalgan
+                    <strong className="text-purple-900">Sinov uchun demo hisoblar:</strong> istalgan demo
                     brend yoki blogerning telefon raqami login bo'ladi, parol — <code className="font-bold">demo1234</code>.
                     Masalan <code className="font-bold">+998 90 123-45-67</code> (NeoStore Texnika) yoki{' '}
                     <code className="font-bold">+998 90 777-11-22</code> (@shahzod_tech).

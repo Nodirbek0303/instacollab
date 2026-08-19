@@ -11,8 +11,9 @@
     "lint": "tsc --noEmit",
     "test:bot": "tsx scripts/bot-selftest.ts",
     "test:storage": "tsx scripts/storage-selftest.ts",
-    "test": "npm run test:storage && npm run test:webhook && npm run test:bot",
-    "test:webhook": "tsx scripts/webhook-selftest.ts"
+    "test": "npm run test:storage && npm run test:webhook && npm run test:bot && npm run build && npm run test:visibility",
+    "test:webhook": "tsx scripts/webhook-selftest.ts",
+    "test:visibility": "tsx scripts/visibility-selftest.ts"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

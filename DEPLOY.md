@@ -136,6 +136,10 @@ Endi:
 4. **«E'lonni joylashtirish»** → e'lon bozorga chiqadi va o'sha yo'nalishdagi, talabga mos
    blogerlarga **darhol Telegram xabari** boradi.
 
+> **Eslatma.** Reklama beruvchi blogerlar ro'yxatini ko'ra olmaydi — katalog yo'q.
+> Aloqani bloger boshlaydi: e'lonni ko'radi va ariza yuboradi, shundan keyingina
+> e'lon egasi uni ko'radi va u bilan bog'lana oladi.
+
 ### Bloger: e'lonni ko'rish va bog'lanish
 
 1. Botda **«📢 Reklama e'lonlari»** → e'lonlar ro'yxati (sahifalab ko'riladi).

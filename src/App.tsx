@@ -23,7 +23,6 @@ import { BrandProfileStudio } from './components/BrandProfileStudio';
 import { ChatDealModal } from './components/ChatDealModal';
 import { HowItWorksModal } from './components/HowItWorksModal';
 import { AccountModal } from './components/AccountModal';
-import { BloggersCatalog } from './components/BloggersCatalog';
 
 const EMPTY_STATE: PlatformState = {
   brands: [],
@@ -65,7 +64,7 @@ export default function App() {
   const [toast, setToast] = useState<Toast | null>(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>('bloggers');
+  const [activeTab, setActiveTab] = useState<string>('campaigns');
 
   const [isCampaignCreatorOpen, setIsCampaignCreatorOpen] = useState(false);
   const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
@@ -76,7 +75,6 @@ export default function App() {
   >(null);
 
   const userRole = auth?.account.role ?? 'advertiser';
-  const isAdvertiser = userRole === 'advertiser';
 
   /* ---------------- Sessiyani tekshirish ---------------- */
 
@@ -178,9 +176,8 @@ export default function App() {
   useEffect(() => {
     if (!auth) return;
     const saved = savedTab.load();
-    const allowed = auth.account.role === 'advertiser'
-      ? ['bloggers', 'campaigns', 'profile']
-      : ['campaigns', 'bloggers', 'profile'];
+    // Blogerlar katalogi yopiq — ikkala rol uchun ham faqat ikki bo'lim qoldi.
+    const allowed = ['campaigns', 'profile'];
     setActiveTab(saved && allowed.includes(saved) ? saved : allowed[0]);
   }, [auth]);
 
@@ -495,15 +492,6 @@ export default function App() {
         )}
 
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          {activeTab === 'bloggers' && (
-            <BloggersCatalog
-              bloggers={data.bloggers}
-              canContact={isAdvertiser}
-              onOpenCreateCampaign={() => setIsCampaignCreatorOpen(true)}
-              onOpenChatWithBlogger={openChatWithBlogger}
-            />
-          )}
-
           {activeTab === 'campaigns' && (
             <CampaignMarketplace
               campaigns={data.campaigns}

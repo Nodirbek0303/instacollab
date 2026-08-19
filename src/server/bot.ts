@@ -2,7 +2,7 @@
  * Telegram bot — platformaning ikkinchi kirish nuqtasi.
  *
  * Uchta foydalanuvchi turi:
- *   • Reklama beruvchi — blogerlar katalogi, o'z e'lonlari va kelgan arizalar;
+ *   • Reklama beruvchi — o'z e'lonlari va ularga kelgan arizalar;
  *   • Bloger — reklama e'lonlari katalogi, ariza yuborish, o'z arizalari;
  *   • Support (yordam xizmati) — parolni tiklash murojaatlari va statistika.
  *
@@ -220,7 +220,6 @@ async function setStep(chatId: number, step: string, draft?: Record<string, unkn
 /* ------------------------------------------------------------------ */
 
 const BTN = {
-  bloggers: '👥 Blogerlar katalogi',
   campaigns: "📢 Reklama e'lonlari",
   myCampaigns: "📋 Mening e'lonlarim",
   myBids: '📤 Mening arizalarim',
@@ -258,8 +257,8 @@ function mainMenu(role: UserRole | 'support'): Keyboard {
     return {
       keyboard: [
         [createBtn],
-        [{ text: BTN.bloggers }, { text: BTN.myCampaigns }],
-        [{ text: BTN.incomingBids }, { text: BTN.profile }],
+        [{ text: BTN.myCampaigns }, { text: BTN.incomingBids }],
+        [{ text: BTN.profile }],
         [panel, { text: BTN.support }],
       ],
       resize_keyboard: true,
@@ -345,17 +344,6 @@ function pager(kind: string, page: number, total: number): Keyboard {
   row.push({ text: `${page + 1} / ${pages}`, callback_data: 'noop' });
   if (page < pages - 1) row.push({ text: 'Keyingi ▶️', callback_data: `page:${kind}:${page + 1}` });
   return { inline_keyboard: [row] };
-}
-
-function bloggersPage(page: number, showContacts: boolean): { text: string; keyboard: Keyboard } {
-  const all = [...db.bloggers].sort((a, b) => b.followersCount - a.followersCount);
-  const slice = all.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-  const text = [
-    `<b>👥 Blogerlar katalogi</b> — jami ${all.length} ta`,
-    '',
-    ...slice.map((blogger) => `${bloggerCard(blogger, showContacts)}\n`),
-  ].join('\n');
-  return { text: text || 'Katalog bo‘sh.', keyboard: pager('bloggers', page, all.length) };
 }
 
 function campaignsPage(page: number): { text: string; keyboard: Keyboard } {
@@ -1023,12 +1011,6 @@ async function handleMessage(message: TgMessage): Promise<void> {
   /* ---- Menyu tugmalari ---- */
 
   switch (text) {
-    case BTN.bloggers: {
-      const { text: body, keyboard } = bloggersPage(0, viewer.account?.role === 'advertiser');
-      await send(chatId, body, keyboard);
-      return;
-    }
-
     case BTN.campaigns: {
       const { text: body, keyboard } = campaignsPage(0);
       await send(chatId, body, keyboard);
@@ -1261,13 +1243,8 @@ async function handleCallback(query: TgCallbackQuery): Promise<void> {
   /* --- Sahifalash --- */
   if (parts[0] === 'page' && messageId) {
     const page = Number(parts[2]) || 0;
-    if (parts[1] === 'bloggers') {
-      const { text, keyboard } = bloggersPage(page, viewer.account?.role === 'advertiser');
-      await editText(chatId, messageId, text, keyboard);
-    } else {
-      const { text, keyboard } = campaignsPage(page);
-      await editText(chatId, messageId, text, keyboard);
-    }
+    const { text, keyboard } = campaignsPage(page);
+    await editText(chatId, messageId, text, keyboard);
     await answerCallback(query.id);
     return;
   }

@@ -18,7 +18,7 @@ import type {
 export type PlatformEvent =
   | { type: 'campaign:new'; campaign: Campaign }
   | { type: 'campaign:deleted'; campaignId: string }
-  | { type: 'bid:new'; bid: ProposalBid; campaignId: string; bidsCount: number }
+  | { type: 'bid:new'; bid: ProposalBid; campaignId: string; bidsCount: number; blogger: BloggerProfile }
   | { type: 'bid:updated'; bid: ProposalBid }
   | { type: 'message:new'; message: ChatMessage }
   | { type: 'blogger:updated'; blogger: BloggerProfile }
@@ -65,6 +65,8 @@ export function applyEvent(state: PlatformState, event: PlatformEvent): Platform
       return {
         ...state,
         bids: upsert(state.bids, event.bid),
+        // Ariza egasining profili — u bo'lmasa e'lon egasi chat ocha olmaydi.
+        bloggers: upsert(state.bloggers, event.blogger),
         // Sonni serverdan kelgan qiymatga tenglashtiramiz — o'zimiz oshirgan
         // bo'lsak ham ikki marta hisoblanmaydi.
         campaigns: state.campaigns.map((c) =>

@@ -1,6 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 
-import type { BloggerProfile, BrandProfile, Campaign, ChatMessage, ProposalBid } from '../types';
+import type { Account, BloggerProfile, BrandProfile, Campaign, ChatMessage, ProposalBid } from '../types';
 import { CAMPAIGN_FORMATS, buildThreadId } from '../types';
 import {
   accountByPhone,
@@ -322,15 +322,84 @@ api.post(
 
 /* ---------- Platforma holati ---------- */
 
+/** Suhbat identifikatori `${brandId}::${bloggerId}` — tomonlarni ajratib olamiz. */
+function threadParties(threadId: string): { brandId: string; bloggerId: string } {
+  const [brandId = '', bloggerId = ''] = threadId.split('::');
+  return { brandId, bloggerId };
+}
+
+/**
+ * Bloger profilini ko'rish huquqi bor profillar ro'yxati.
+ *
+ * Blogerning o'zi va u bilan allaqachon ish boshlagan brendlar — ya'ni uning
+ * arizasini olgan yoki u bilan yozishgan brendlar. Boshqalar uchun bloger
+ * umuman mavjud emas.
+ */
+function bloggerAudience(bloggerId: string): string[] {
+  const brandIds = new Set<string>();
+
+  for (const bid of db.bids) {
+    if (bid.bloggerId !== bloggerId) continue;
+    const campaign = db.campaigns.find((c) => c.id === bid.campaignId);
+    if (campaign) brandIds.add(campaign.brandId);
+  }
+
+  for (const message of db.messages) {
+    const { brandId, bloggerId: other } = threadParties(message.threadId);
+    if (other === bloggerId) brandIds.add(brandId);
+  }
+
+  return [bloggerId, ...brandIds];
+}
+
+/**
+ * Foydalanuvchiga ko'rsatiladigan ma'lumot.
+ *
+ * Blogerlar katalogi yopiq. Reklama beruvchi blogerlarni ko'rib chiqa olmaydi —
+ * u faqat o'z e'loniga ariza yuborgan yoki u bilan yozishgan blogerni ko'radi.
+ * Bloger ham boshqa blogerlarni ko'rmaydi, faqat o'z profilini.
+ *
+ * Bu cheklov aynan shu yerda — serverda — turishi muhim: aks holda interfeysdan
+ * tugmani olib tashlash kifoya qilmaydi va `/api/state` ga to'g'ridan-to'g'ri
+ * murojaat qilgan odam butun ro'yxatni olib qo'yaveradi.
+ *
+ * E'lonlar va ularni joylagan brendlar ochiq qoladi — bozorning mohiyati shu,
+ * bloger e'lonni ko'rib o'zi bog'lanadi.
+ */
+function visibleState(account: Account) {
+  const shared = { brands: db.brands, campaigns: db.campaigns };
+
+  if (account.role === 'blogger') {
+    return {
+      ...shared,
+      bloggers: db.bloggers.filter((b) => b.id === account.profileId),
+      bids: db.bids.filter((b) => b.bloggerId === account.profileId),
+      messages: db.messages.filter((m) => threadParties(m.threadId).bloggerId === account.profileId),
+    };
+  }
+
+  const myCampaigns = new Set(
+    db.campaigns.filter((c) => c.brandId === account.profileId).map((c) => c.id),
+  );
+  const bids = db.bids.filter((b) => myCampaigns.has(b.campaignId));
+  const messages = db.messages.filter((m) => threadParties(m.threadId).brandId === account.profileId);
+
+  // Ko'rinadigan blogerlar: ariza yuborganlar va yozishganlar.
+  const known = new Set([
+    ...bids.map((b) => b.bloggerId),
+    ...messages.map((m) => threadParties(m.threadId).bloggerId),
+  ]);
+
+  return {
+    ...shared,
+    bloggers: db.bloggers.filter((b) => known.has(b.id)),
+    bids,
+    messages,
+  };
+}
+
 api.get('/state', readLimit, (req, res) => {
-  requireAccount(req);
-  res.json({
-    brands: db.brands,
-    bloggers: db.bloggers,
-    campaigns: db.campaigns,
-    bids: db.bids,
-    messages: db.messages,
-  });
+  res.json(visibleState(requireAccount(req)));
 });
 
 /* ---------- Profillar ---------- */
@@ -399,7 +468,8 @@ api.patch(
 
     await persist();
 
-    broadcast({ type: 'blogger:updated', blogger: updated });
+    // Bloger profili hammaga emas — faqat o'ziga va u bilan ishlagan brendlarga.
+    broadcast({ type: 'blogger:updated', blogger: updated }, bloggerAudience(updated.id));
     res.json(updated);
   }),
 );
@@ -526,7 +596,7 @@ api.post(
     // Arizada kontaktlar bor — faqat ikkala tomonga yuboriladi.
     const updatedCampaign = db.campaigns.find((c) => c.id === campaign.id);
     broadcast(
-      { type: 'bid:new', bid, campaignId: campaign.id, bidsCount: updatedCampaign?.bidsCount ?? 0 },
+      { type: 'bid:new', bid, campaignId: campaign.id, bidsCount: updatedCampaign?.bidsCount ?? 0, blogger },
       [campaign.brandId, blogger.id],
     );
     void notify.newBid(bid, campaign);

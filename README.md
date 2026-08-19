@@ -1,7 +1,7 @@
 # InstaCollab UZ
 
-Instagram blogerlari va reklama beruvchilarni bog'lovchi platforma: bloger katalogi va statistikasi,
-reklama e'lonlari bozori, arizalar, sayt ichidagi chat va to'g'ridan-to'g'ri aloqa (Telegram / Instagram / telefon).
+Instagram blogerlari va reklama beruvchilarni bog'lovchi platforma: reklama e'lonlari bozori,
+arizalar, sayt ichidagi chat va to'g'ridan-to'g'ri aloqa (Telegram / Instagram / telefon).
 
 ## Akaunt turlari
 
@@ -9,8 +9,8 @@ Har bir foydalanuvchining **bitta hisobi** bo'ladi va uning turi ro'yxatdan o'ti
 
 | Tur | Kim | Nima qila oladi |
 | --- | --- | --- |
-| **Reklama beruvchi** | Brend, do'kon, xizmat | E'lon joylaydi, kelgan arizalarni ko'rib chiqadi va tasdiqlaydi, blogerlar bilan bog'lanadi |
-| **Bloger** | Instagram sahifa egasi | Media kit yuritadi, e'lonlarga ariza yuboradi, brendlar bilan yozishadi |
+| **Reklama beruvchi** | Brend, do'kon, xizmat | E'lon joylaydi, kelgan arizalarni ko'rib chiqadi va tasdiqlaydi, ariza yuborgan bloger bilan bog'lanadi |
+| **Bloger** | Instagram sahifa egasi | Media kit yuritadi, e'lonlarni ko'radi, ariza yuboradi, brendlar bilan yozishadi |
 
 Tur keyin o'zgartirilmaydi. Ikkinchi turdagi hisob kerak bo'lsa, boshqa telefon raqami bilan alohida
 ro'yxatdan o'tiladi. Kirish **telefon raqami + parol** orqali; parollar `scrypt` bilan xeshlanadi va hech
@@ -24,6 +24,22 @@ Server har bir amalni sessiya bo'yicha tekshiradi, masalan:
 - profilni faqat egasi tahrirlay oladi;
 - tizimga kirmagan odam hech qanday ma'lumotni ko'ra olmaydi.
 
+### Blogerlar ro'yxati yopiq
+
+Reklama beruvchi blogerlarni ko'rib chiqa olmaydi — katalog yo'q. Aloqani **bloger boshlaydi**:
+u e'lonni ko'radi va ariza yuboradi, shundan keyingina e'lon egasi uni ko'radi.
+
+| Kim | Qaysi blogerlarni ko'radi |
+| --- | --- |
+| Reklama beruvchi | Faqat o'z e'loniga ariza yuborgan yoki u bilan yozishgan blogerlarni |
+| Bloger | Faqat o'zini |
+
+Bu cheklov `GET /api/state` ichida — serverda — bajariladi. Ya'ni interfeysni chetlab o'tib
+API'ga to'g'ridan-to'g'ri murojaat qilgan odam ham ro'yxatni ololmaydi. Jonli yangilanishlarda
+ham shunday: bloger profili o'zgarsa, xabar faqat o'ziga va u bilan ishlagan brendlarga boradi.
+
+E'lonlar va ularni joylagan brendlar esa **ochiq** — bozorning mohiyati shunda.
+
 ## Telegram bot
 
 Platformaning ikkinchi kirish nuqtasi. Bot `TELEGRAM_BOT_TOKEN` berilganda avtomatik ishga tushadi
@@ -34,8 +50,8 @@ Platformaning ikkinchi kirish nuqtasi. Bot `TELEGRAM_BOT_TOKEN` berilganda avtom
 | Rol | Botdagi imkoniyatlar |
 | --- | --- |
 | **Mehmon** | Ro'yxatdan o'tish, mavjud hisobni ulash, parolni tiklash so'rovi |
-| **Reklama beruvchi** | Blogerlar katalogi (kontaktlari bilan), o'z e'lonlari, kelgan arizalarni ko'rish va bir bosishda tasdiqlash/rad etish |
-| **Bloger** | Reklama e'lonlari katalogi, to'g'ridan-to'g'ri botdan ariza yuborish, o'z arizalari holati |
+| **Reklama beruvchi** | Reklama joylash, o'z e'lonlari, kelgan arizalarni ko'rish va bir bosishda tasdiqlash/rad etish |
+| **Bloger** | Reklama e'lonlari ro'yxati, to'g'ridan-to'g'ri botdan ariza yuborish, o'z arizalari holati |
 | **Support** | Ochiq murojaatlar, parolni tiklash (tugma yoki raqam orqali), platforma statistikasi |
 
 ### Xavfsizlik: botda parol so'ralmaydi
@@ -99,7 +115,7 @@ npm run test:bot
 ```
 
 Telegramga ulanmasdan, `fetch` almashtirilgan holda butun suhbat mantiqini tekshiradi:
-ro'yxatdan o'tish, katalog, ariza, takroriy ariza, support tayinlash, parolni tiklashning
+ro'yxatdan o'tish, e'lonlar ro'yxati, ariza, takroriy ariza, support tayinlash, parolni tiklashning
 ikkala yo'li, ruxsat tekshiruvlari, Mini App tugmalari va `initData` imzosi (buzilgan,
 o'zgartirilgan, eskirgan holatlar bilan) — jami **45 ta tekshiruv**.
 
@@ -156,9 +172,11 @@ yaratilgan bo'lsa, uni serverga chiqarishdan oldin o'chiring: `rm -rf data/`
 
 ```bash
 npm run lint          # TypeScript tekshiruvi (tsc --noEmit)
-npm test              # barcha sinovlar (saqlash + bot)
-npm run test:storage  # saqlash qatlami: Postgres va fayl (25 ta tekshiruv)
-npm run test:bot      # Telegram bot mantiqi (54 ta tekshiruv)
+npm test                 # barcha sinovlar
+npm run test:storage     # saqlash qatlami: Postgres va fayl (25 ta tekshiruv)
+npm run test:webhook     # webhook manzili va imzosi (11 ta tekshiruv)
+npm run test:bot         # Telegram bot mantiqi (54 ta tekshiruv)
+npm run test:visibility  # kim kimni ko'radi (24 ta tekshiruv, `npm run build` talab qiladi)
 npm run build         # frontend + server bundle -> dist/
 npm start             # tayyor bundle'ni ishga tushirish
 ```

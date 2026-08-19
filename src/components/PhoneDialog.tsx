@@ -8,7 +8,7 @@ interface PhoneDialogProps {
   onClose: () => void;
 }
 
-/** Telefon raqamini ko'rsatuvchi kichik oyna — katalog va bozorda birgalikda ishlatiladi. */
+/** Telefon raqamini ko'rsatuvchi kichik oyna — bozor va chatda birgalikda ishlatiladi. */
 export function PhoneDialog({ target, onClose }: PhoneDialogProps) {
   const href = telUrl(target?.phone);
 
