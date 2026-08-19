@@ -281,10 +281,21 @@ function mainMenu(role: UserRole | 'support'): Keyboard {
   };
 }
 
+/**
+ * Mehmon menyusi.
+ *
+ * Ro'yxatdan o'tish saytda bo'ladi: u yerda profilni to'liq to'ldirish
+ * qulayroq. Mini App ochilmaydigan holatda (masalan `APP_URL` HTTPS emas)
+ * botdagi savol-javob usuli zaxira sifatida qoladi.
+ */
 function guestMenuKeyboard(): Keyboard {
+  const register: InlineButton = canOpenMiniApp()
+    ? { text: "🆕 Ro'yxatdan o'tish", web_app: { url: panelUrl('action=register') } }
+    : { text: "🆕 Ro'yxatdan o'tish", callback_data: 'reg:start' };
+
   return {
     inline_keyboard: [
-      [{ text: "🆕 Ro'yxatdan o'tish", callback_data: 'reg:start' }],
+      [register],
       [{ text: '🔗 Mavjud hisobni ulash', callback_data: 'link:start' }],
       [{ text: '🆘 Yordam / parolni tiklash', callback_data: 'help:start' }],
     ],
@@ -1733,6 +1744,47 @@ export const notify = {
           : `🗑 <b>E‘loningiz o‘chirildi:</b> ${esc(campaign.title)}${because}`;
 
     await sendToAccount(accountByProfileId(campaign.brandId), text);
+  },
+
+  /**
+   * Yangi ro'yxatdan o'tish — adminlarga.
+   *
+   * Odam to'lov haqida yozishdan oldin admin uni panelda ko'rib turishi
+   * kerak, shuning uchun xabar darhol yuboriladi.
+   */
+  async newRegistration(account: Account): Promise<void> {
+    if (!botInfo.enabled) return;
+
+    let name = account.phone;
+    try {
+      name = profileOf(account).name;
+    } catch {
+      /* profil topilmasa telefon yetarli */
+    }
+
+    const text = [
+      '🆕 <b>Yangi ro‘yxatdan o‘tish</b>',
+      '',
+      `👤 ${esc(name)}`,
+      `📞 ${esc(account.phone)}`,
+      `🏷 ${account.role === 'advertiser' ? 'Reklama beruvchi' : 'Bloger'}`,
+      '',
+      'To‘lov qabul qilingach admin panelidan tasdiqlang.',
+    ].join('\n');
+
+    for (const telegramId of db.supportAdmins) await send(telegramId, text);
+  },
+
+  /** Hisob tasdiqlandi — egasiga xabar va kirish taklifi. */
+  async accountApproved(account: Account): Promise<void> {
+    await sendToAccount(
+      account,
+      [
+        '✅ <b>Hisobingiz tasdiqlandi!</b>',
+        '',
+        'Endi tizimga erkin kira olasiz. «🚀 Panelni ochish» tugmasini bosing yoki saytga telefon raqamingiz va parolingiz bilan kiring.',
+      ].join('\n'),
+    );
   },
 
   /** Admin parolni tikladi — yangi vaqtinchalik parolni egasiga yuboramiz. */

@@ -281,6 +281,8 @@ export interface Account {
    * Admin qo'ygan holat. Yo'q bo'lsa — `active` deb hisoblanadi (eski yozuvlar
    * uchun).
    *
+   *  • `pending` — ro'yxatdan o'tgan, lekin admin hali tasdiqlamagan: to'lov
+   *                qilinib, admin tasdiqlagunga qadar kira olmaydi;
    *  • `frozen`  — vaqtincha to'xtatilgan: kira olmaydi, lekin hammasi joyida
    *                turadi va istalgan payt qaytariladi;
    *  • `deleted` — o'chirilgan: e'lonlari va profili hech kimga ko'rinmaydi.
@@ -294,7 +296,7 @@ export interface Account {
   statusBy?: string;
 }
 
-export type AccountStatus = 'active' | 'frozen' | 'deleted';
+export type AccountStatus = 'pending' | 'active' | 'frozen' | 'deleted';
 
 /**
  * E'lonning moderatsiya holati. Bu `Campaign.status` dan boshqa narsa:

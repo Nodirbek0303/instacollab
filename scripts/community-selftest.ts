@@ -40,7 +40,7 @@ async function registerBlogger(
 }
 
 async function main(): Promise<void> {
-  harness = await startTestServer({ port: 34569, env: { ADMIN_PHONES: ADMIN_PHONE } });
+  harness = await startTestServer({ port: 34569, env: { ADMIN_PHONES: ADMIN_PHONE, REQUIRE_APPROVAL: 'false' } });
 
   const admin = harness.session('admin');
   const brand = harness.session('brend');
@@ -186,7 +186,7 @@ async function main(): Promise<void> {
 
   harness = await startTestServer({
     port: 34570,
-    env: { ADMIN_PHONES: ADMIN_PHONE, EARLY_ACCESS_MINUTES: '0' },
+    env: { ADMIN_PHONES: ADMIN_PHONE, EARLY_ACCESS_MINUTES: '0', REQUIRE_APPROVAL: 'false' },
   });
 
   const admin2 = harness.session('admin');

@@ -19,9 +19,22 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Serverning to'liq javobi — qo'shimcha maydonlar uchun (masalan `pending`). */
+    readonly payload: Record<string, unknown> | null = null,
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+
+  /** Hisob admin tasdig'ini kutayaptimi. */
+  get isPendingApproval(): boolean {
+    return this.payload?.pending === true;
+  }
+
+  /** To'lov uchun murojaat qilinadigan Telegram username'i. */
+  get adminContact(): string | null {
+    const value = this.payload?.adminContact;
+    return typeof value === 'string' && value ? value : null;
   }
 }
 
@@ -46,7 +59,11 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
       (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string'
         ? payload.error
         : null) ?? "Amalni bajarib bo'lmadi.";
-    throw new ApiError(message, response.status);
+    throw new ApiError(
+      message,
+      response.status,
+      payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null,
+    );
   }
 
   return payload as T;
@@ -73,6 +90,15 @@ export interface RegisterInput {
 export interface AppConfig {
   telegramBot: string | null;
   telegramBotUrl: string | null;
+  /** To'lov uchun murojaat qilinadigan Telegram username'i (@ siz). */
+  adminContact: string | null;
+}
+
+/** Ro'yxatdan o'tish tasdiq kutayotgan bo'lsa server shuni qaytaradi. */
+export interface PendingApproval {
+  pending: true;
+  adminContact: string | null;
+  message: string;
 }
 
 export const api = {
@@ -82,7 +108,8 @@ export const api = {
 
   me: () => request<AuthPayload>('/api/auth/me'),
 
-  register: (input: RegisterInput) => request<AuthPayload>('/api/auth/register', post(input)),
+  register: (input: RegisterInput) =>
+    request<AuthPayload | PendingApproval>('/api/auth/register', post(input)),
 
   login: (phone: string, password: string) =>
     request<AuthPayload>('/api/auth/login', post({ phone, password })),
@@ -172,7 +199,7 @@ export const api = {
     ),
 };
 
-export type AccountAction = 'freeze' | 'unfreeze' | 'delete' | 'restore';
+export type AccountAction = 'approve' | 'reject' | 'freeze' | 'unfreeze' | 'delete' | 'restore';
 export type CampaignAction = 'hide' | 'show' | 'delete' | 'restore';
 
 /** Admin panelidagi bitta hisob qatori. */

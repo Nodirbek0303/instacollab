@@ -88,6 +88,26 @@ export function syncSupportAdmins(): { removed: number; kept: number } {
   return { removed: before.length - kept.filter((id) => before.includes(id)).length, kept: kept.length };
 }
 
+/**
+ * Foydalanuvchi to'lov uchun murojaat qiladigan Telegram manzili.
+ *
+ * Avval `.env` dagi `ADMIN_CONTACT` qaraladi, topilmasa — admin hisobining
+ * Telegram username'i. Ikkalasi ham bo'lmasa `null`, o'shanda interfeys
+ * «botga yozing» deb yo'naltiradi.
+ */
+export function adminContact(): string | null {
+  const configured = (process.env.ADMIN_CONTACT ?? '').trim().replace(/^@/, '');
+  if (configured) return configured;
+
+  const allowed = adminPhones();
+  for (const account of db.accounts) {
+    if (allowed.length > 0 && !allowed.includes(account.phone)) continue;
+    if (!isAdminAccount(account)) continue;
+    if (account.telegramUsername) return account.telegramUsername;
+  }
+  return null;
+}
+
 export function requireAdmin(req: Request): Account {
   const account = requireAccount(req);
   if (!isAdminAccount(account)) {

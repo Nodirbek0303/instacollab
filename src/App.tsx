@@ -17,6 +17,7 @@ import { applyEvent, connectLive } from './lib/live';
 import { AdminPanel } from './components/AdminPanel';
 import { BloggersCatalog } from './components/BloggersCatalog';
 import { VerifiedPanel } from './components/VerifiedPanel';
+import { PendingApprovalScreen } from './components/PendingApprovalScreen';
 import { Modal } from './components/Modal';
 
 import { AuthScreen } from './components/AuthScreen';
@@ -65,6 +66,12 @@ export default function App() {
   const [isLive, setIsLive] = useState(false);
   /** Hisob admin huquqiga egami — panel shu asosda ko'rsatiladi. */
   const [isAdmin, setIsAdmin] = useState(false);
+  /** Hisob admin tasdig'ini kutayotgan bo'lsa — shu ekran ko'rsatiladi. */
+  const [pendingApproval, setPendingApproval] = useState<{
+    adminContact: string | null;
+    message?: string;
+    justRegistered: boolean;
+  } | null>(null);
   /** Shikoyat qilinayotgan e'lon. */
   const [reportTarget, setReportTarget] = useState<Campaign | null>(null);
   const [reportReason, setReportReason] = useState<string>(REPORT_REASONS[0]);
@@ -313,14 +320,41 @@ export default function App() {
   /* ---------------- Kirish/chiqish ---------------- */
 
   const handleLogin = useCallback(async (phone: string, password: string) => {
-    const payload = await api.login(phone, password);
-    cachedState.clear();
-    setAuth(payload);
+    try {
+      const payload = await api.login(phone, password);
+      cachedState.clear();
+      setAuth(payload);
+    } catch (error) {
+      // Tasdiq kutayotgan hisob uchun oddiy xato emas, tushuntirish ekrani.
+      if (error instanceof ApiError && error.isPendingApproval) {
+        setPendingApproval({
+          adminContact: error.adminContact,
+          message: error.message,
+          justRegistered: false,
+        });
+        return;
+      }
+      throw error;
+    }
   }, []);
 
   const handleRegister = useCallback(async (input: RegisterInput) => {
     const payload = await api.register(input);
     cachedState.clear();
+
+    /*
+     * Tasdiq talab qilinsa server sessiya ochmaydi va `pending` qaytaradi —
+     * o'shanda kabinet o'rniga «to'lov va tasdiq» ekrani ko'rsatiladi.
+     */
+    if ('pending' in payload) {
+      setPendingApproval({
+        adminContact: payload.adminContact,
+        message: payload.message,
+        justRegistered: true,
+      });
+      return;
+    }
+
     setAuth(payload);
   }, []);
 
@@ -570,6 +604,15 @@ export default function App() {
 
   if (!auth) {
     return (
+      pendingApproval ? (
+        <PendingApprovalScreen
+          adminContact={pendingApproval.adminContact}
+          botUrl={config?.telegramBotUrl ?? null}
+          message={pendingApproval.message}
+          justRegistered={pendingApproval.justRegistered}
+          onBack={() => setPendingApproval(null)}
+        />
+      ) : (
       <AuthScreen
         onLogin={handleLogin}
         onRegister={handleRegister}
@@ -577,6 +620,7 @@ export default function App() {
         inTelegram={inTelegram}
         telegramError={telegramAuthError}
       />
+      )
     );
   }
 

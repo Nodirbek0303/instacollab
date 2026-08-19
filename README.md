@@ -178,6 +178,7 @@ npm run test:bot         # Telegram bot mantiqi (54 ta tekshiruv)
 npm run test:visibility  # kim kimni ko'radi (24 ta tekshiruv, `npm run build` talab qiladi)
 npm run test:admin       # admin paneli va moderatsiya (49 ta tekshiruv)
 npm run test:community   # statistika, obuna, ptichka (53 ta tekshiruv)
+npm run test:approval    # ro'yxatdan o'tish va admin tasdig'i (30 ta tekshiruv)
 npm run build         # frontend + server bundle -> dist/
 npm start             # tayyor bundle'ni ishga tushirish
 ```
@@ -208,7 +209,7 @@ npm start             # tayyor bundle'ni ishga tushirish
 | `POST` | `/api/reports` | sessiya | E'lon ustidan shikoyat |
 | `GET` | `/api/admin/me` | sessiya | Admin huquqi bormi |
 | `GET` | `/api/admin/overview` | **admin** | To'liq manzara: hisoblar, e'lonlar, shikoyatlar, jurnal |
-| `PATCH` | `/api/admin/accounts/:id` | **admin** | Muzlatish / o'chirish / qayta tiklash |
+| `PATCH` | `/api/admin/accounts/:id` | **admin** | Tasdiqlash / rad etish / muzlatish / o'chirish / qayta tiklash |
 | `POST` | `/api/admin/accounts/:id/reset-password` | **admin** | Parolni tiklash |
 | `PATCH` | `/api/admin/campaigns/:id` | **admin** | E'lonni yashirish / o'chirish / qaytarish |
 | `PATCH` | `/api/admin/reports/:id` | **admin** | Shikoyatni yopish |
@@ -238,6 +239,43 @@ o'zgarmas bo'lgani uchun brauzer uni bir yil keshlaydi.
 
 Server tekshiruvlari: tur (faqat JPG/PNG/WEBP), hajm (3 MB gacha) va **sarlavha baytlari** —
 ya'ni `.png` deb nomlangan matn fayli o'tib ketmaydi.
+
+## Ro'yxatdan o'tish va admin tasdig'i
+
+Yangi foydalanuvchi darhol kira olmaydi: hisob **admin tasdiqlagunga qadar yopiq** turadi.
+
+### Oqim
+
+1. Foydalanuvchi botga `/start` yozadi va **«🆕 Ro'yxatdan o'tish»** tugmasini bosadi.
+   Tugma saytni (Telegram Mini App) ochadi — profilni to'ldirish u yerda qulayroq.
+2. Formani to'ldirib yuboradi. Server hisobni yaratadi, lekin **sessiya ochmaydi**:
+   javob `202` va `pending: true` bo'ladi.
+3. Foydalanuvchiga tushuntirish ekrani chiqadi va **«Administratorga yozish»** tugmasi
+   uni to'g'ridan-to'g'ri adminning Telegramiga olib boradi.
+4. Admin to'lovni qabul qiladi va panelda **«To'lov qabul qilindi — tasdiqlash»** bosadi.
+5. Foydalanuvchiga Telegram orqali xabar boradi va u erkin kira oladi.
+
+Admin panelida kutayotgan hisoblar **ro'yxat tepasida** sariq blokda turadi, «Hisoblar»
+bo'limining yorlig'ida esa ularning soni ko'rinadi.
+
+### Nima yopiq
+
+Tasdiqlanmagan hisob **hech narsa ola olmaydi**: sessiya ochilmaydi, parol to'g'ri bo'lsa
+ham kirish `403` beradi, `/api/state` esa `401`. Cheklov `requireAccount` ichida — ya'ni
+har bir so'rovda ishlaydi.
+
+Xato parol kiritilsa baribir `401` qaytadi va `pending` oshkor qilinmaydi — aks holda
+begona odam raqamlarni sinab, kim ro'yxatdan o'tganini bilib olardi.
+
+### Sozlash
+
+| O'zgaruvchi | Vazifasi |
+| --- | --- |
+| `ADMIN_CONTACT` | To'lov uchun murojaat qilinadigan Telegram username'i (`@nodirbek` yoki `nodirbek`) |
+| `REQUIRE_APPROVAL` | `false` qilinsa tasdiq talab qilinmaydi va ro'yxatdan o'tish darhol ishlaydi |
+
+`ADMIN_CONTACT` berilmasa, admin hisobining Telegram username'i ishlatiladi; u ham bo'lmasa
+foydalanuvchi botga yo'naltiriladi.
 
 ## Bloger hamjamiyati
 
@@ -387,6 +425,8 @@ uzmasligi uchun har 25 soniyada bo'sh signal yuboriladi. Ilova fondan qaytganda
 | `ADMIN_PHONES` | Vergul bilan ajratilgan telefon raqamlari — **faqat** shu hisoblar admin bo'ladi |
 | `EARLY_ACCESS_MINUTES` | Ptichkasizlar e'lonni shuncha daqiqa kechroq ko'radi (standart 15) |
 | `VERIFICATION_PRICE` | Ptichka narxi — blogerga ko'rsatiladigan matn. Berilmasa ko'rsatilmaydi |
+| `ADMIN_CONTACT` | To'lov uchun murojaat qilinadigan Telegram username'i |
+| `REQUIRE_APPROVAL` | `false` — yangi hisoblar admin tasdig'ini kutmaydi (standart: kutadi) |
 | `DATABASE_URL` | Postgres manzili. Berilsa — ma'lumotlar shu yerda saqlanadi |
 | `BOT_MODE` | `polling` deb yozilsa, HTTPS bo'lsa ham long polling ishlatiladi |
 | `HOST` | Ilova qaysi manzilda tinglaydi (proksi ortida `127.0.0.1`) |

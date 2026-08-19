@@ -2,6 +2,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 
 import type {
   Account,
+  AccountStatus,
   BloggerProfile,
   BrandProfile,
   Campaign,
@@ -41,8 +42,8 @@ import { HttpError, handle, normalizePhone, num, oneOf, str, strList } from './v
 import { notify, botInfo } from './bot';
 import { verifyInitData } from './miniapp';
 import { addClient, broadcast, connectedClients, startHeartbeat } from './events';
-import { isAdminAccount, logAction, requireAdmin } from './admin';
-import { blockedReason, canSeeCampaign, isAccountActive, moderationState } from './status';
+import { adminContact, isAdminAccount, logAction, requireAdmin } from './admin';
+import { accountStatus, blockedReason, canSeeCampaign, isAccountActive, moderationState } from './status';
 import {
   canBloggerSeeCampaign,
   minutesUntilOpen,
@@ -163,6 +164,8 @@ api.get('/config', readLimit, (_req, res) => {
   res.json({
     telegramBot: botInfo.username ? `@${botInfo.username}` : null,
     telegramBotUrl: botInfo.username ? `https://t.me/${botInfo.username}` : null,
+    // To'lov uchun murojaat qilinadigan Telegram manzili.
+    adminContact: adminContact(),
     liveClients: connectedClients(),
   });
 });
@@ -265,6 +268,21 @@ api.post(
     const password = typeof body.password === 'string' ? body.password : '';
     const account = await createAccount({ role, phone, password, profile: body });
 
+    /*
+     * Tasdiq talab qilinsa sessiya ochilmaydi: hisob to'lov qilinib, admin
+     * tasdiqlagunga qadar yopiq turadi. Mijozga aynan shu holat qaytariladi,
+     * shunda u «adminga yozing» ekranini ko'rsatadi.
+     */
+    if (!isAccountActive(account)) {
+      void notify.newRegistration(account);
+      res.status(202).json({
+        pending: true,
+        adminContact: adminContact(),
+        message: blockedReason(account),
+      });
+      return;
+    }
+
     await startSession(req, res, account.id);
     res.status(201).json(authPayload(account));
   }),
@@ -284,7 +302,15 @@ api.post(
     if (!account || !ok) throw new HttpError(401, "Telefon raqami yoki parol noto'g'ri");
     // Parol to'g'ri bo'lsa ham muzlatilgan hisobga kirib bo'lmaydi. Sabab
     // aytiladi, aks holda odam nima bo'lganini tushunmay qoladi.
-    if (!isAccountActive(account)) throw new HttpError(403, blockedReason(account));
+    if (!isAccountActive(account)) {
+      // Mijoz tasdiq kutilayotganini boshqa xatolardan ajrata olishi kerak.
+      res.status(403).json({
+        error: blockedReason(account),
+        pending: accountStatus(account) === 'pending',
+        adminContact: adminContact(),
+      });
+      return;
+    }
 
     await startSession(req, res, account.id);
     res.json(authPayload(account));
@@ -318,7 +344,14 @@ api.post(
       return;
     }
 
-    if (!isAccountActive(account)) throw new HttpError(403, blockedReason(account));
+    if (!isAccountActive(account)) {
+      res.status(403).json({
+        error: blockedReason(account),
+        pending: accountStatus(account) === 'pending',
+        adminContact: adminContact(),
+      });
+      return;
+    }
 
     // Telegram username o'zgargan bo'lsa yangilaymiz.
     if (account.telegramUsername !== telegramUser.username) {
@@ -851,6 +884,7 @@ api.get(
     res.json({
       stats: {
         accounts: db.accounts.length,
+        pending: db.accounts.filter((a) => a.status === 'pending').length,
         frozen: db.accounts.filter((a) => (a.status ?? 'active') === 'frozen').length,
         deleted: db.accounts.filter((a) => a.status === 'deleted').length,
         brands: db.brands.length,
@@ -896,7 +930,25 @@ api.get(
   }),
 );
 
-const ACCOUNT_ACTIONS = ['freeze', 'unfreeze', 'delete', 'restore'] as const;
+const ACCOUNT_ACTIONS = ['approve', 'reject', 'freeze', 'unfreeze', 'delete', 'restore'] as const;
+
+type AccountAction = (typeof ACCOUNT_ACTIONS)[number];
+
+/** Amal hisobni qaysi holatga o'tkazadi. */
+function nextStatusOf(action: AccountAction): AccountStatus {
+  if (action === 'freeze') return 'frozen';
+  if (action === 'delete' || action === 'reject') return 'deleted';
+  return 'active';
+}
+
+const ACTION_LABELS: Record<AccountAction, string> = {
+  approve: 'Hisob tasdiqlandi',
+  reject: "Ro'yxatdan o'tish rad etildi",
+  freeze: 'Hisob muzlatildi',
+  unfreeze: 'Muzlatish bekor qilindi',
+  delete: "Hisob o'chirildi",
+  restore: 'Hisob qayta tiklandi',
+};
 
 /**
  * Hisob holatini o'zgartirish.
@@ -917,15 +969,19 @@ api.patch(
     const action = oneOf(body.action, ACCOUNT_ACTIONS, 'freeze');
     const reason = str(body.reason, 'Sabab', { max: 500 });
 
-    if (target.id === admin.id && action !== 'unfreeze' && action !== 'restore') {
+    if (target.id === admin.id && nextStatusOf(action) !== 'active') {
       throw new HttpError(400, "O'z hisobingizni bloklay olmaysiz");
     }
-    if (isAdminAccount(target) && target.id !== admin.id && (action === 'freeze' || action === 'delete')) {
+    if (isAdminAccount(target) && target.id !== admin.id && nextStatusOf(action) !== 'active') {
       throw new HttpError(403, 'Boshqa administrator hisobini bloklab bo‘lmaydi');
     }
 
     const nextStatus =
-      action === 'freeze' ? 'frozen' : action === 'delete' ? 'deleted' : 'active';
+      action === 'freeze'
+        ? 'frozen'
+        : action === 'delete' || action === 'reject'
+          ? 'deleted'
+          : 'active';
 
     target.status = nextStatus;
     target.statusReason = nextStatus === 'active' ? undefined : reason || undefined;
@@ -945,14 +1001,7 @@ api.patch(
 
     const entry = logAction({
       admin,
-      action:
-        action === 'freeze'
-          ? 'Hisob muzlatildi'
-          : action === 'delete'
-            ? "Hisob o'chirildi"
-            : action === 'unfreeze'
-              ? 'Muzlatish bekor qilindi'
-              : 'Hisob qayta tiklandi',
+      action: ACTION_LABELS[action],
       targetType: 'account',
       targetId: target.id,
       targetLabel: label,
@@ -962,7 +1011,11 @@ api.patch(
     await persist();
 
     // Egasi o'zgarishdan xabardor bo'lsin.
-    void notify.accountStatusChanged(target, nextStatus, reason);
+    if (action === 'approve') {
+      void notify.accountApproved(target);
+    } else {
+      void notify.accountStatusChanged(target, nextStatus, reason);
+    }
 
     // Hisob bloklansa e'lonlari bozordan yo'qoladi (yoki qaytadi) —
     // hamma ochiq turgan sahifa buni darhol ko'rishi kerak.

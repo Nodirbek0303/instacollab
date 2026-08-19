@@ -236,6 +236,25 @@ umuman ko'rinmaydi va API darajasida ham yopiq.
 tushishida huquqni bazadan ham olib qo'yadi. Jurnalda `[admin] ruxsat etilgan raqamlar: …` degan
 qator chiqadi, shundan tekshirib olasiz.
 
+## To'lov uchun aloqa manzili
+
+Yangi foydalanuvchilar hisobini siz tasdiqlaysiz. Ular sizga qayerga yozishini bilishi uchun
+Render → Environment:
+
+```
+ADMIN_CONTACT=@sizning_username
+```
+
+Bu manzil ro'yxatdan o'tgan odamga «Administratorga yozish» tugmasida ko'rinadi va bir
+bosishda sizning Telegramingizni ochadi.
+
+Berilmasa, admin hisobining Telegram username'i ishlatiladi. Tasdiqni umuman
+o'chirmoqchi bo'lsangiz:
+
+```
+REQUIRE_APPROVAL=false
+```
+
 ## Ptichka narxini ko'rsatish (ixtiyoriy)
 
 Render → Environment:

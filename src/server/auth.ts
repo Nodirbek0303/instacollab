@@ -5,7 +5,7 @@ import type { Request, Response } from 'express';
 import type { Account, BloggerProfile, BrandProfile, SessionRecord, UserRole } from '../types';
 import { TIERS } from '../types';
 import { db, makeId, persist, profileOf } from './db';
-import { blockedReason, isAccountActive } from './status';
+import { blockedReason, isAccountActive, requiresApproval } from './status';
 import { HttpError, handle, num, oneOf, str, strList } from './validate';
 
 const SESSION_COOKIE = 'instacollab_session';
@@ -296,6 +296,9 @@ export async function createAccount(input: {
     passwordHash: await hashPassword(input.password),
     role: input.role,
     profileId,
+    // Yangi hisob admin tasdig'ini kutadi — to'lov qilinmaguncha yopiq.
+    status: requiresApproval() ? 'pending' : 'active',
+    statusAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
     telegramId: input.telegramId,
     telegramUsername: input.telegramUsername,

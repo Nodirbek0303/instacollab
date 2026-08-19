@@ -17,6 +17,9 @@ import { join } from 'node:path';
 // bazasiga tegmaydi, aks holda mavjud telefon raqamlari sinovni yiqitadi.
 process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'instacollab-bot-test-'));
 delete process.env.DATABASE_URL;
+// Bot sinovi ro'yxatdan o'tish oqig'ini tekshiradi, admin tasdig'ini emas —
+// tasdiq talabi alohida sinovda (`approval-selftest`) tekshiriladi.
+process.env.REQUIRE_APPROVAL = 'false';
 process.env.TELEGRAM_BOT_TOKEN = 'TEST:TOKEN';
 process.env.ADMIN_SETUP_CODE = 'TESTCODE';
 // HTTPS manzil — Mini App tugmalari sinovi uchun.
@@ -162,10 +165,13 @@ async function main(): Promise<void> {
   pushMessage('/start');
   await settle();
   check('mehmon menyusi ko‘rsatildi', lastText().includes('xush kelibsiz'), lastText());
-  check(
-    'ro‘yxatdan o‘tish tugmasi bor',
-    JSON.stringify(sent[sent.length - 1].payload).includes('reg:start'),
-  );
+  {
+    // Ro'yxatdan o'tish saytda bo'ladi — tugma panelni ochadi.
+    const menu = JSON.stringify(sent[sent.length - 1].payload);
+    check('ro‘yxatdan o‘tish tugmasi bor', menu.includes("Ro'yxatdan o'tish"), menu.slice(0, 300));
+    check('tugma panelni ochadi', menu.includes('web_app') && menu.includes('action=register'), menu.slice(0, 300));
+    check('hisobni ulash tugmasi qoldi', menu.includes('link:start'));
+  }
 
   console.log('\n2. Bloger sifatida ro‘yxatdan o‘tish');
   pushCallback('reg:start');

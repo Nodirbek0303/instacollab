@@ -15,7 +15,14 @@ import { join } from 'node:path';
 
 export interface Harness {
   base: string;
-  stop: () => void;
+  /** Serverning ma'lumotlar katalogi — qayta ishga tushirishda qayta ishlatiladi. */
+  dataDir: string;
+  /**
+   * Serverni to'xtatadi. `keepData` berilsa katalog o'chirilmaydi — bu
+   * boshqa sozlamalar bilan qayta ko'tarish uchun kerak (masalan tasdiq
+   * talabini yoqib ko'rish).
+   */
+  stop: (options?: { keepData?: boolean }) => void;
   session: (label?: string) => Session;
 }
 
@@ -82,8 +89,10 @@ export class Session {
 export async function startTestServer(options: {
   port: number;
   env?: Record<string, string>;
+  /** Mavjud katalogni qayta ishlatish — bazani saqlab qolish uchun. */
+  dataDir?: string;
 }): Promise<Harness> {
-  const dataDir = mkdtempSync(join(tmpdir(), 'instacollab-test-'));
+  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), 'instacollab-test-'));
   const base = `http://127.0.0.1:${options.port}/api`;
 
   const child: ChildProcess = spawn('node', ['dist/server.cjs'], {
@@ -108,9 +117,10 @@ export async function startTestServer(options: {
         if (body.status === 'ok') {
           return {
             base,
-            stop: () => {
+            dataDir,
+            stop: (stopOptions) => {
               child.kill('SIGKILL');
-              rmSync(dataDir, { recursive: true, force: true });
+              if (!stopOptions?.keepData) rmSync(dataDir, { recursive: true, force: true });
             },
             session: (label = 'sinov') => new Session(base, label),
           };

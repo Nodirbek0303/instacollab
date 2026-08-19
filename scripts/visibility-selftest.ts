@@ -22,7 +22,7 @@ const { check, report } = createChecker();
 let harness: Harness | null = null;
 
 async function main(): Promise<void> {
-  harness = await startTestServer({ port: 34567, env: { EARLY_ACCESS_MINUTES: '0' } });
+  harness = await startTestServer({ port: 34567, env: { EARLY_ACCESS_MINUTES: '0', REQUIRE_APPROVAL: 'false' } });
 
   const brandA = harness.session('Brend A');
   const brandB = harness.session('Brend B');

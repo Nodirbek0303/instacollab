@@ -99,6 +99,16 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
 
   const accountAction = (id: string, name: string, action: AccountAction) => {
     const labels: Record<AccountAction, { title: string; hint: string; done: string }> = {
+      approve: {
+        title: 'Hisobni tasdiqlash',
+        hint: `To'lov qabul qilindimi? Tasdiqlangach «${name}» tizimga erkin kira oladi va unga Telegram orqali xabar boradi.`,
+        done: 'Hisob tasdiqlandi',
+      },
+      reject: {
+        title: "Ro'yxatdan o'tishni rad etish",
+        hint: `«${name}» hisobi yopiladi. Ma'lumot bazada qoladi — keyin fikringizni o'zgartirsangiz qayta tiklay olasiz.`,
+        done: "Ro'yxatdan o'tish rad etildi",
+      },
       freeze: {
         title: 'Hisobni muzlatish',
         hint: `«${name}» tizimga kira olmaydi va e'lonlari bozordan yo'qoladi. Hech narsa o'chirilmaydi — istalgan payt qaytarasiz.`,
@@ -125,7 +135,7 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
     ask({
       title: config.title,
       hint: config.hint,
-      reasonRequired: action === 'freeze' || action === 'delete',
+      reasonRequired: action === 'freeze' || action === 'delete' || action === 'reject',
       run: (text) =>
         perform(async () => {
           await api.adminAccountAction(id, action, text);
@@ -224,6 +234,7 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
 
   const openReports = data.reports.filter((report) => !report.resolvedAt);
   const pendingVerifications = data.verificationRequests.filter((r) => r.status === 'pending');
+  const pendingAccounts = data.accounts.filter((row) => row.status === 'pending');
 
   return (
     <div className="space-y-5">
@@ -249,8 +260,8 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
               : id === 'verified'
                 ? pendingVerifications.length
                 : id === 'accounts'
-                  ? data.accounts.length
-                  : 0;
+                ? pendingAccounts.length || data.accounts.length
+                : 0;
           return (
             <button
               key={id}
@@ -273,7 +284,9 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
                       ? 'bg-rose-500 text-white'
                       : id === 'verified'
                         ? 'bg-violet-600 text-white'
-                        : 'bg-purple-100 text-purple-900'
+                        : id === 'accounts' && pendingAccounts.length > 0
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-purple-100 text-purple-900'
                   }`}
                 >
                   {count}
@@ -298,6 +311,7 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { label: 'Hisoblar', value: data.stats.accounts, tone: 'violet' },
+            { label: 'Tasdiq kutmoqda', value: data.stats.pending, tone: 'amber' },
             { label: 'Muzlatilgan', value: data.stats.frozen, tone: 'amber' },
             { label: "O'chirilgan", value: data.stats.deleted, tone: 'rose' },
             { label: 'Onlayn', value: data.stats.liveClients, tone: 'emerald' },
@@ -362,6 +376,54 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
       {/* ---------- Hisoblar ---------- */}
       {section === 'accounts' && (
         <div className="space-y-2.5">
+          {/* Tasdiq kutayotganlar eng tepada — ular kutib turibdi. */}
+          {pendingAccounts.length > 0 && !query.trim() && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-1">
+              <h3 className="text-xs font-black text-amber-900 uppercase tracking-wider mb-2.5">
+                Tasdiq kutmoqda ({pendingAccounts.length})
+              </h3>
+
+              <div className="space-y-2">
+                {pendingAccounts.map((row) => (
+                  <div
+                    key={row.id}
+                    className="bg-white border border-amber-200 rounded-2xl p-3.5 flex items-center gap-3 flex-wrap"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-black text-slate-900 truncate">{row.profileName}</h4>
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-900">
+                          {row.role === 'advertiser' ? 'Reklama beruvchi' : 'Bloger'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-semibold mt-0.5 tabular-nums">
+                        {row.phone} · {formatDate(row.createdAt)}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => accountAction(row.id, row.profileName, 'approve')}
+                        className="flex items-center gap-1.5 text-[11px] font-black px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                        To'lov qabul qilindi — tasdiqlash
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => accountAction(row.id, row.profileName, 'reject')}
+                        className="text-[11px] font-black px-3 py-2 rounded-xl bg-white text-rose-800 border border-rose-200 hover:bg-rose-50 transition cursor-pointer"
+                      >
+                        Rad etish
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {accounts.length === 0 && (
             <p className="text-sm text-slate-500 font-semibold text-center py-8">Hech narsa topilmadi.</p>
           )}
@@ -372,7 +434,7 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
               className={`bg-white border rounded-2xl p-4 ${
                 row.status === 'deleted'
                   ? 'border-rose-200 bg-rose-50/30'
-                  : row.status === 'frozen'
+                  : row.status === 'frozen' || row.status === 'pending'
                     ? 'border-amber-200 bg-amber-50/30'
                     : 'border-purple-100'
               }`}
@@ -399,6 +461,12 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
                     {row.isAdmin && (
                       <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-violet-900 text-white">
                         ADMIN
+                      </span>
+                    )}
+
+                    {row.status === 'pending' && (
+                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-500 text-white">
+                        TASDIQ KUTMOQDA
                       </span>
                     )}
 
@@ -433,6 +501,17 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
               </div>
 
               <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-purple-50">
+                {row.status === 'pending' && (
+                  <button
+                    type="button"
+                    onClick={() => accountAction(row.id, row.profileName, 'approve')}
+                    className="flex items-center gap-1.5 text-[11px] font-black px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                    Tasdiqlash
+                  </button>
+                )}
+
                 {row.status === 'active' && (
                   <button
                     type="button"
