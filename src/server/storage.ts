@@ -78,6 +78,9 @@ const defaultConnect: PgConnect = async (url) => {
     ssl: { rejectUnauthorized: false },
     max: 3,
     idleTimeoutMillis: 30_000,
+    // Neon bepul tarifda uxlab qoladi — sovuq start ~5 soniya. Cheksiz
+    // kutmaslik uchun chegara qo'yamiz, aks holda server osilib qolishi mumkin.
+    connectionTimeoutMillis: 20_000,
   });
 };
 
