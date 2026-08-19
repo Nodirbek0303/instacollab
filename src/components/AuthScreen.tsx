@@ -446,7 +446,7 @@ export function AuthScreen({
                           maxLength={80}
                           value={brandName}
                           onChange={(event) => setBrandName(event.target.value)}
-                          placeholder="Masalan: 'NeoStore Texnika'"
+                          placeholder="Brend yoki do'kon nomi"
                           className={inputClass}
                         />
                       </div>
