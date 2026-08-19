@@ -194,6 +194,30 @@ SELECT data FROM instacollab_state WHERE id = 1;
 
 ---
 
+## Ma'lumotlar bazasini qo'lda tahrirlash
+
+Ilova butun holatni **xotirada** saqlaydi va har o'zgarishda yaxlit yozadi. Shuning uchun
+xizmat ishlab turganda Postgres'ni tashqaridan tahrirlash **foydasiz** — ishlab turgan nusxa
+keyingi yozuvda eski holatni qaytarib qo'yadi (to'xtatilganda ham, chunki u yopilishdan oldin
+xotiradagi ma'lumotni saqlaydi).
+
+To'g'ri tartib — **avval to'xtatish, keyin tahrirlash**:
+
+```bash
+# 1. Xizmatni to'xtatish (Render panelida "Suspend" yoki API orqali)
+curl -X POST https://api.render.com/v1/services/SRV_ID/suspend -H "Authorization: Bearer RENDER_API_KEY"
+
+# 2. 15 soniya kutib, so'ng bazani tahrirlash (Neon SQL Editor yoki psql)
+
+# 3. Qayta yoqish
+curl -X POST https://api.render.com/v1/services/SRV_ID/resume -H "Authorization: Bearer RENDER_API_KEY"
+```
+
+Odatdagi o'zgarishlar (parol tiklash, hisob boshqarish) uchun **botdagi support paneli**dan
+foydalaning — u ilovaning o'zi orqali ishlagani uchun bunday muammo bo'lmaydi.
+
+---
+
 ## Muammolarni hal qilish
 
 | Muammo | Sabab va yechim |
