@@ -180,6 +180,7 @@ npm run test:admin       # admin paneli va moderatsiya (49 ta tekshiruv)
 npm run test:community   # statistika, obuna, ptichka (53 ta tekshiruv)
 npm run test:approval    # ro'yxatdan o'tish va admin tasdig'i (30 ta tekshiruv)
 npm run test:payment     # e'lon to'lovi (34 ta tekshiruv)
+npm run test:notify      # bildirishnoma kimga borishi (23 ta tekshiruv)
 npm run build         # frontend + server bundle -> dist/
 npm start             # tayyor bundle'ni ishga tushirish
 ```
@@ -278,6 +279,42 @@ begona odam raqamlarni sinab, kim ro'yxatdan o'tganini bilib olardi.
 
 `ADMIN_CONTACT` berilmasa, admin hisobining Telegram username'i ishlatiladi; u ham bo'lmasa
 foydalanuvchi botga yo'naltiriladi.
+
+## Telegram bildirishnomalari — kim nima oladi
+
+Har bir xabar **faqat egasiga** boradi. Quyidagi jadval to'liq ro'yxat:
+
+| Voqea | Kim oladi |
+| --- | --- |
+| Yangi ariza | E'lon egasi |
+| Ariza tasdiqlandi / rad etildi | Ariza yuborgan bloger |
+| Chat xabari | Faqat qabul qiluvchi |
+| Yangi obunachi | Obuna bo'lingan bloger |
+| E'lon yashirildi / o'chirildi | E'lon egasi |
+| E'lon to'lovi tasdiqlandi | E'lon egasi |
+| Hisob tasdiqlandi / muzlatildi / o'chirildi | Hisob egasi |
+| Yangi parol | Hisob egasi |
+| Ptichka qarori | Bloger |
+| **Yangi ro'yxatdan o'tish** | Faqat adminlar |
+| **E'lon to'lovi kutilmoqda** | Faqat adminlar |
+| **Shikoyat** | Faqat adminlar |
+| **Ptichka so'rovi** | Faqat adminlar |
+| Yangi e'lon e'lon qilindi | Yo'nalishi mos va talabga javob beradigan blogerlar |
+
+Oxirgi ikki turdagi xabar ataylab bir nechta odamga boradi: birinchisi nazorat uchun,
+ikkinchisi esa bozorning mohiyati.
+
+### Bir Telegram — bir hisob
+
+Telegram hisobi bir vaqtning o'zida **faqat bitta** akkauntga ulanadi. Yangi akkauntga
+ulanganda eski bog'lanish avtomatik uziladi (`claimTelegramId`).
+
+Busiz `accountByTelegramId` ro'yxatdagi birinchi mos hisobni qaytarardi va bir odam
+boshqa hisobning arizalarini olib turishi mumkin edi.
+
+`scripts/notify-selftest.ts` har bir xabar uchun **ikki narsani** tekshiradi: kerakli
+odamga bordimi va **boshqa hech kimga bormadimi**. Ikkinchisi muhimroq — xabar
+yetmasligi noqulaylik, begonaga ketishi esa ma'lumot sizib chiqishi.
 
 ## E'lon narxi
 

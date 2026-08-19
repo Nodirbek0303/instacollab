@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 
 import type { Account, BloggerProfile, BrandProfile, SessionRecord, UserRole } from '../types';
 import { TIERS } from '../types';
-import { db, makeId, persist, profileOf } from './db';
+import { claimTelegramId, db, makeId, persist, profileOf } from './db';
 import { blockedReason, isAccountActive, requiresApproval } from './status';
 import { HttpError, handle, num, oneOf, str, strList } from './validate';
 
@@ -305,6 +305,13 @@ export async function createAccount(input: {
   };
 
   db.accounts = [...db.accounts, account];
+
+  // Bir Telegram — bir hisob. Botdan ro'yxatdan o'tilganda bu id boshqa
+  // hisobga ulangan bo'lishi mumkin; o'shanda undan uziladi.
+  if (input.telegramId != null) {
+    claimTelegramId(account.id, input.telegramId, input.telegramUsername);
+  }
+
   await persist();
   return account;
 }

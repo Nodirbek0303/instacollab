@@ -160,6 +160,39 @@ export function accountByTelegramId(telegramId: number): Account | undefined {
   return db.accounts.find((account) => account.telegramId === telegramId);
 }
 
+/**
+ * Telegram hisobini bitta akkauntga biriktiradi.
+ *
+ * Bir Telegram — bir hisob. Aks holda `accountByTelegramId` ro'yxatdagi
+ * birinchisini qaytarardi va bildirishnomalar aralashib ketardi: bir odam
+ * boshqa hisobning arizalarini olib turardi.
+ *
+ * Shuning uchun avval shu Telegram id boshqa hisoblardan uziladi, keyin
+ * kerakligiga qo'yiladi.
+ *
+ * @returns uzilib qolgan hisoblar soni — jurnalga yozish uchun.
+ */
+export function claimTelegramId(
+  accountId: string,
+  telegramId: number,
+  telegramUsername?: string,
+): number {
+  let detached = 0;
+
+  db.accounts = db.accounts.map((account) => {
+    if (account.id === accountId) {
+      return { ...account, telegramId, telegramUsername };
+    }
+    if (account.telegramId === telegramId) {
+      detached++;
+      return { ...account, telegramId: undefined, telegramUsername: undefined };
+    }
+    return account;
+  });
+
+  return detached;
+}
+
 export function accountByPhone(phone: string): Account | undefined {
   return db.accounts.find((account) => account.phone === phone);
 }

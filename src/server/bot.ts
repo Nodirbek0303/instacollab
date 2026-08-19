@@ -37,6 +37,7 @@ import {
   makeId,
   persist,
   profileOf,
+  claimTelegramId,
 } from './db';
 import { createAccount, generateTempPassword, hashPassword, revokeAllSessions } from './auth';
 import { adminPhones, isAdminTelegramId } from './admin';
@@ -765,10 +766,15 @@ async function handleContact(message: TgMessage): Promise<void> {
       return;
     }
 
+    // Bir Telegram — bir hisob: bu id boshqa hisobga ulangan bo'lsa uziladi.
+    const detached = claimTelegramId(account.id, from.id, from.username);
     account.telegramId = from.id;
     account.telegramUsername = from.username;
-    db.accounts = db.accounts.map((item) => (item.id === account.id ? account : item));
     await persist();
+
+    if (detached > 0) {
+      console.log(`[bot] telegram ${from.id} ${detached} ta eski hisobdan uzildi`);
+    }
     await setStep(chatId, 'idle');
 
     await send(chatId, '✅ Hisobingiz Telegramga ulandi.', { remove_keyboard: true });
