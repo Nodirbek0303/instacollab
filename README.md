@@ -182,10 +182,29 @@ npm start             # tayyor bundle'ni ishga tushirish
 | `PATCH` | `/api/bids/:id` | e'lon egasi | Ariza holatini o'zgartirish |
 | `POST` | `/api/auth/password` | sessiya | Parolni o'zgartirish |
 | `GET` | `/api/config` | — | Ochiq sozlamalar (bot manzili, demo rejimi) |
+| `POST` | `/api/images` | sessiya | Profil rasmini yuklash (JPG/PNG/WEBP) |
+| `GET` | `/api/images/:id` | — | Rasmni berish (abadiy keshlanadi) |
 | `POST` | `/api/messages` | sessiya | Chat xabari |
 
 Barcha yozuv so'rovlari validatsiyadan o'tadi, uzunligi cheklanadi va IP bo'yicha rate-limit qo'llanadi
 (kirish/ro'yxat uchun alohida, qattiqroq chegara).
+
+## Profil rasmlari
+
+Bloger avatarini va brend logotipini to'g'ridan-to'g'ri yuklash mumkin — telefondan yoki
+kompyuterdan. Rasm **brauzerda** kvadrat qilib qirqiladi va 512×512 gacha kichraytiriladi
+(JPEG, sifat 0.85), shundan keyingina serverga yuboriladi: 1600×1200 PNG odatda ~141 KB dan
+~8 KB ga tushadi.
+
+Rasmlar asosiy bazadan **alohida** saqlanadi (`instacollab_images` jadvali yoki `DATA_DIR/images/`).
+Sababi: platforma holati bitta JSON hujjat bo'lib, har o'zgarishda yaxlit qayta yoziladi —
+rasmlar o'sha yerda bo'lsa, har bir kichik o'zgarishda yuzlab kilobayt qayta yozilardi.
+
+Fayl nomi mazmunning sha256 xeshidan olinadi: bir xil rasm ikki marta saqlanmaydi va manzil
+o'zgarmas bo'lgani uchun brauzer uni bir yil keshlaydi.
+
+Server tekshiruvlari: tur (faqat JPG/PNG/WEBP), hajm (3 MB gacha) va **sarlavha baytlari** —
+ya'ni `.png` deb nomlangan matn fayli o'tib ketmaydi.
 
 ## Muhit o'zgaruvchilari
 

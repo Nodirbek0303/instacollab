@@ -29,6 +29,14 @@ import {
 import { HttpError, handle, normalizePhone, num, oneOf, str, strList } from './validate';
 import { notify, botInfo } from './bot';
 import { verifyInitData } from './miniapp';
+import {
+  MAX_IMAGE_BYTES,
+  imageId,
+  imageStore,
+  isValidImageId,
+  mimeFromId,
+  validateImage,
+} from './images';
 
 /* ------------------------------------------------------------------ */
 /* Rate-limit                                                          */
@@ -101,6 +109,60 @@ api.get('/config', readLimit, (_req, res) => {
     demoMode: process.env.NODE_ENV !== 'production',
   });
 });
+
+/* ---------- Rasmlar ---------- */
+
+const uploadLimit = rateLimit(20, 'upload');
+
+/**
+ * Rasm yuklash. Mijoz rasmni oldindan kichraytirib, JPEG/PNG/WEBP ko'rinishida
+ * xom bayt sifatida yuboradi. Javobda `/api/images/<id>` manzili qaytadi —
+ * uni profilning `avatar` yoki `logo` maydoniga yozish kifoya.
+ */
+api.post(
+  '/images',
+  uploadLimit,
+  express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_IMAGE_BYTES }),
+  asyncRoute(async (req, res) => {
+    requireAccount(req);
+
+    const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    const contentType = String(req.headers['content-type'] ?? '').split(';')[0].trim();
+    const { mime, ext } = validateImage(contentType, bytes);
+
+    const id = imageId(bytes, ext);
+    const store = imageStore();
+    // Bir xil rasm ikkinchi marta saqlanmaydi — id mazmun xeshidan olingan.
+    if (!(await store.exists(id))) await store.save({ id, mime, bytes });
+
+    res.status(201).json({ id, url: `/api/images/${id}`, bytes: bytes.length });
+  }),
+);
+
+/** Rasmni berish. Manzil mazmunga bog'liq bo'lgani uchun abadiy keshlanadi. */
+api.get(
+  '/images/:id',
+  readLimit,
+  asyncRoute(async (req, res) => {
+    const id = req.params.id;
+    if (!isValidImageId(id)) {
+      res.status(404).json({ error: 'Rasm topilmadi' });
+      return;
+    }
+
+    const image = await imageStore().load(id);
+    if (!image) {
+      res.status(404).json({ error: 'Rasm topilmadi' });
+      return;
+    }
+
+    res.setHeader('Content-Type', image.mime || mimeFromId(id));
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Length', String(image.bytes.length));
+    res.end(image.bytes);
+  }),
+);
 
 /* ---------- Autentifikatsiya ---------- */
 

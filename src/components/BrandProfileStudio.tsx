@@ -11,6 +11,7 @@ import {
 
 import type { BrandProfile } from '../types';
 import { NICHES } from '../types';
+import { ImageUpload } from './ImageUpload';
 
 interface BrandProfileStudioProps {
   profile: BrandProfile;
@@ -170,20 +171,14 @@ export function BrandProfileStudio({ profile, onUpdateProfile }: BrandProfileStu
               />
             </div>
 
-            <div>
-              <label htmlFor="input-brand-profile-logo" className={labelClass}>
-                Logotip havolasi (URL)
-              </label>
-              <input
-                id="input-brand-profile-logo"
-                type="url"
-                maxLength={500}
-                value={formData.logo}
-                onChange={(event) => update('logo', event.target.value)}
-                placeholder="https://..."
-                className={inputClass}
-              />
-            </div>
+            <ImageUpload
+              value={formData.logo}
+              onChange={(url) => update('logo', url)}
+              label="Brend logotipi"
+              alt={`${formData.name} logotipi`}
+              hint="Logotip e'lonlaringizda va katalogda ko'rinadi. JPG, PNG yoki WEBP."
+              shape="rounded"
+            />
           </fieldset>
 
           <fieldset className="bg-white border border-purple-100/90 rounded-3xl p-6 shadow-md shadow-purple-950/5 space-y-4">

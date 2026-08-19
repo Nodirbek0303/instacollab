@@ -14,6 +14,7 @@ import {
 import type { BloggerProfile } from '../types';
 import { CITIES, NICHES } from '../types';
 import { formatFollowers, formatUzs } from '../lib/format';
+import { ImageUpload } from './ImageUpload';
 
 interface CreatorProfileStudioProps {
   profile: BloggerProfile;
@@ -112,6 +113,15 @@ export function CreatorProfileStudio({ profile, onUpdateProfile }: CreatorProfil
               <Users className="w-4 h-4 text-pink-600" aria-hidden="true" />
               <span>Profil asosiy ma'lumotlari</span>
             </legend>
+
+            <ImageUpload
+              value={formData.avatar}
+              onChange={(url) => update('avatar', url)}
+              label="Profil surati"
+              alt={`${formData.name} profil rasmi`}
+              hint="Brendlar sizni katalogda shu surat bilan ko'radi. JPG, PNG yoki WEBP."
+              shape="circle"
+            />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
