@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Flag, Loader2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CreditCard, Flag, Loader2, Send, X } from 'lucide-react';
 
 import type {
   AuthPayload,
@@ -12,7 +12,8 @@ import type {
 import { REPORT_REASONS } from './types';
 import { ApiError, api, type AppConfig, type RegisterInput } from './lib/api';
 import { cachedState, dropLegacyCache, savedTab } from './lib/storage';
-import { getInitData, initTelegram, isTelegramMiniApp } from './lib/telegram';
+import { formatUzs } from './lib/format';
+import { getInitData, initTelegram, isTelegramMiniApp, openLink } from './lib/telegram';
 import { applyEvent, connectLive } from './lib/live';
 import { AdminPanel } from './components/AdminPanel';
 import { BloggersCatalog } from './components/BloggersCatalog';
@@ -71,6 +72,12 @@ export default function App() {
     adminContact: string | null;
     message?: string;
     justRegistered: boolean;
+  } | null>(null);
+  /** Yangi e'lon to'lov kutayotgan bo'lsa — to'lov haqidagi oyna. */
+  const [paymentNotice, setPaymentNotice] = useState<{
+    title: string;
+    price: number;
+    adminContact: string | null;
   } | null>(null);
   /** Shikoyat qilinayotgan e'lon. */
   const [reportTarget, setReportTarget] = useState<Campaign | null>(null);
@@ -409,9 +416,23 @@ export default function App() {
         return next;
       });
       setActiveTab('campaigns');
+
+      /*
+       * To'lov talab qilinsa e'lon hali bozorda emas — buni aytib qo'yish
+       * kerak, aks holda reklama beruvchi uni ko'rinmayapti deb o'ylaydi.
+       */
+      if (campaign.awaitingPayment) {
+        setPaymentNotice({
+          title: campaign.title,
+          price: campaign.price ?? config?.campaignPrice ?? 0,
+          adminContact: campaign.adminContact ?? config?.adminContact ?? null,
+        });
+        return;
+      }
+
       setToast({ kind: 'success', text: "E'lon joylandi. Blogerlar endi siz bilan bog'lana oladi." });
     },
-    [],
+    [config],
   );
 
   const handleDeleteCampaign = useCallback(
@@ -779,6 +800,7 @@ export default function App() {
           onClose={() => setIsCampaignCreatorOpen(false)}
           currentBrand={currentBrand}
           onCreateCampaign={handleCreateCampaign}
+          price={config?.campaignPrice ?? 0}
         />
       )}
 
@@ -793,6 +815,62 @@ export default function App() {
       />
 
       <HowItWorksModal isOpen={isHowItWorksOpen} onClose={() => setIsHowItWorksOpen(false)} />
+
+      {/* E'lon uchun to'lov */}
+      <Modal
+        isOpen={paymentNotice !== null}
+        onClose={() => setPaymentNotice(null)}
+        size="md"
+        eyebrow="To'lov"
+        title="E'lon saqlandi — to'lovni kuting"
+        icon={<CreditCard className="w-4 h-4 text-violet-600" aria-hidden="true" />}
+        bodyClassName="p-6"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 leading-relaxed">
+            «{paymentNotice?.title}» e'loni saqlandi, lekin hali bozorda ko'rinmaydi. E'lon
+            joylash narxi — <strong className="text-violet-900">{formatUzs(paymentNotice?.price ?? 0)}</strong>.
+          </p>
+
+          <ol className="space-y-2 bg-violet-50/60 border border-violet-100 rounded-2xl p-4 list-none m-0">
+            <li className="flex gap-2 text-xs text-slate-700">
+              <span className="font-extrabold text-violet-900 shrink-0">1.</span>
+              <span>Administratorga yozing va to'lovni amalga oshiring.</span>
+            </li>
+            <li className="flex gap-2 text-xs text-slate-700">
+              <span className="font-extrabold text-violet-900 shrink-0">2.</span>
+              <span>
+                To'lov tasdiqlangach e'lon avtomatik bozorga chiqadi va sizga Telegramga xabar
+                keladi.
+              </span>
+            </li>
+          </ol>
+
+          <p className="text-[11px] text-slate-500">
+            E'loningiz «Mening e'lonlarim» bo'limida «To'lov kutilmoqda» belgisi bilan turadi.
+          </p>
+
+          <div className="flex items-center gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setPaymentNotice(null)}
+              className="text-xs font-black px-4 py-2.5 rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition cursor-pointer"
+            >
+              Yopish
+            </button>
+            {paymentNotice?.adminContact && (
+              <button
+                type="button"
+                onClick={() => openLink(`https://t.me/${paymentNotice.adminContact}`)}
+                className="text-xs font-black px-4 py-2.5 rounded-2xl bg-violet-900 text-white hover:bg-violet-950 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Send className="w-3.5 h-3.5" aria-hidden="true" />
+                Administratorga yozish
+              </button>
+            )}
+          </div>
+        </div>
+      </Modal>
 
       {/* Yolg'on e'lon haqida xabar berish */}
       <Modal

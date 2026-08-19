@@ -55,6 +55,27 @@ export function moderationState(campaign: Campaign): ModerationState {
   return campaign.moderation?.state ?? 'ok';
 }
 
+/**
+ * Bitta e'lon joylash narxi (so'mda).
+ *
+ * `CAMPAIGN_PRICE=0` bo'lsa to'lov talab qilinmaydi va e'lon darhol chiqadi.
+ */
+export function campaignPrice(): number {
+  const raw = Number(process.env.CAMPAIGN_PRICE);
+  if (Number.isFinite(raw) && raw >= 0) return Math.round(raw);
+  return 10_000;
+}
+
+/**
+ * E'lon to'langanmi.
+ *
+ * `payment` maydoni yo'q e'lonlar to'langan hisoblanadi — ular narx
+ * joriy qilinishidan oldin yaratilgan yoki bepul rejimda chiqqan.
+ */
+export function isCampaignPaid(campaign: Campaign): boolean {
+  return !campaign.payment || campaign.payment.status === 'paid';
+}
+
 /** Profil egasining hisobi bloklangan bo'lsa — profil ham ko'rinmasligi kerak. */
 export function profileBlocked(profileId: string): boolean {
   const owner = db.accounts.find((a) => a.profileId === profileId);
@@ -64,10 +85,17 @@ export function profileBlocked(profileId: string): boolean {
 /**
  * Foydalanuvchi shu e'lonni ko'ra oladimi.
  *
- * Egasi o'z e'lonini yashirilgan bo'lsa ham ko'radi — sababi bilan birga,
- * shunda nima uchun bozorda yo'qolganini tushunadi.
+ * Egasi o'z e'lonini yashirilgan yoki to'lov kutayotgan bo'lsa ham ko'radi —
+ * shunda nima uchun bozorda yo'qligini tushunadi.
  */
 export function canSeeCampaign(campaign: Campaign, viewerProfileId: string): boolean {
+  // Egasi o'zinikini har doim ko'radi — to'lov kutilayotganini ham,
+  // yashirilganini ham, sababi bilan birga.
   if (campaign.brandId === viewerProfileId) return moderationState(campaign) !== 'deleted';
-  return moderationState(campaign) === 'ok' && !profileBlocked(campaign.brandId);
+
+  return (
+    moderationState(campaign) === 'ok' &&
+    isCampaignPaid(campaign) &&
+    !profileBlocked(campaign.brandId)
+  );
 }

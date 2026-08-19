@@ -43,7 +43,15 @@ import { notify, botInfo } from './bot';
 import { verifyInitData } from './miniapp';
 import { addClient, broadcast, connectedClients, startHeartbeat } from './events';
 import { adminContact, isAdminAccount, logAction, requireAdmin } from './admin';
-import { accountStatus, blockedReason, canSeeCampaign, isAccountActive, moderationState } from './status';
+import {
+  accountStatus,
+  blockedReason,
+  campaignPrice,
+  canSeeCampaign,
+  isAccountActive,
+  isCampaignPaid,
+  moderationState,
+} from './status';
 import {
   canBloggerSeeCampaign,
   minutesUntilOpen,
@@ -123,6 +131,7 @@ async function releaseDelayedCampaigns(now: number): Promise<void> {
       campaign.publishedAt &&
       !campaign.notifiedAllAt &&
       moderationState(campaign) === 'ok' &&
+      isCampaignPaid(campaign) &&
       isOpenToEveryone(campaign, now),
   );
 
@@ -166,6 +175,8 @@ api.get('/config', readLimit, (_req, res) => {
     telegramBotUrl: botInfo.username ? `https://t.me/${botInfo.username}` : null,
     // To'lov uchun murojaat qilinadigan Telegram manzili.
     adminContact: adminContact(),
+    // Bitta e'lon joylash narxi (so'm). 0 — bepul.
+    campaignPrice: campaignPrice(),
     liveClients: connectedClients(),
   });
 });
@@ -566,8 +577,6 @@ api.post(
       status: 'active',
       bidsCount: 0,
       createdDate: todayLabel(),
-      // Ptichka ustunligi shu vaqtdan hisoblanadi.
-      publishedAt: new Date().toISOString(),
       talkingPoints: strList(body.talkingPoints, { max: 12, itemMax: 200 }),
       hashtags: strList(body.hashtags, { max: 10, itemMax: 40 }),
       contactTelegram: handle(body.contactTelegram, 'Telegram', brand.contactTelegram),
@@ -582,11 +591,39 @@ api.post(
       },
     };
 
+    /*
+     * To'lov talab qilinsa e'lon bozorga chiqmaydi: admin to'lovni
+     * tasdiqlagunga qadar uni faqat egasi ko'radi. `publishedAt` ham
+     * o'shanda qo'yiladi — ptichka ustunligi kutish vaqtida yonib
+     * ketmasligi uchun.
+     */
+    const price = campaignPrice();
+    if (price > 0) {
+      campaign.payment = {
+        status: 'pending',
+        amount: price,
+        requestedAt: new Date().toISOString(),
+      };
+    } else {
+      campaign.publishedAt = new Date().toISOString();
+    }
+
     db.campaigns = [campaign, ...db.campaigns];
     db.brands = db.brands.map((b) =>
       b.id === brand.id ? { ...b, totalCampaignsCreated: (b.totalCampaignsCreated ?? 0) + 1 } : b,
     );
     await persist();
+
+    if (price > 0) {
+      void notify.campaignAwaitingPayment(campaign, price);
+      res.status(201).json({
+        ...campaign,
+        awaitingPayment: true,
+        price,
+        adminContact: adminContact(),
+      });
+      return;
+    }
 
     /**
      * Birinchi 15 daqiqa — faqat ptichkalilar uchun.
@@ -877,6 +914,8 @@ api.get(
     const campaigns = db.campaigns.map((campaign) => ({
       ...campaign,
       moderationState: moderationState(campaign),
+      paymentStatus: campaign.payment?.status ?? null,
+      paymentAmount: campaign.payment?.amount ?? null,
       reportsCount: db.reports.filter((r) => r.campaignId === campaign.id && !r.resolvedAt).length,
       ownerStatus: db.accounts.find((a) => a.profileId === campaign.brandId)?.status ?? 'active',
     }));
@@ -891,6 +930,7 @@ api.get(
         bloggers: db.bloggers.length,
         campaigns: db.campaigns.length,
         hiddenCampaigns: db.campaigns.filter((c) => moderationState(c) !== 'ok').length,
+        unpaidCampaigns: db.campaigns.filter((c) => c.payment?.status === 'pending').length,
         bids: db.bids.length,
         messages: db.messages.length,
         openReports: db.reports.filter((r) => !r.resolvedAt).length,
@@ -1382,5 +1422,83 @@ api.patch(
     void notify.verificationChanged(blogger, action === 'grant', reason);
 
     res.json({ ok: true, isVerified: blogger.isVerified });
+  }),
+);
+
+/* ------------------------------------------------------------------ */
+/* Admin: e'lon to'lovi                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * E'lon to'lovini tasdiqlash yoki bekor qilish.
+ *
+ * Tasdiqlangan paytda e'lon bozorga chiqadi va ptichka ustunligining
+ * 15 daqiqasi aynan shundan boshlanadi — kutish vaqti hisobga olinmaydi.
+ */
+api.patch(
+  '/admin/campaigns/:id/payment',
+  writeLimit,
+  asyncRoute(async (req, res) => {
+    const admin = requireAdmin(req);
+    const campaign = db.campaigns.find((c) => c.id === req.params.id);
+    if (!campaign) throw new HttpError(404, "Bunday e'lon topilmadi");
+    if (!campaign.payment) throw new HttpError(400, "Bu e'lon uchun to'lov talab qilinmagan");
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const action = oneOf(body.action, ['confirm', 'revoke'] as const, 'confirm');
+    const note = str(body.note, 'Izoh', { max: 500 });
+
+    const now = new Date().toISOString();
+
+    if (action === 'confirm') {
+      campaign.payment = {
+        ...campaign.payment,
+        status: 'paid',
+        paidAt: now,
+        confirmedBy: admin.id,
+        note: note || undefined,
+      };
+      // E'lon endi ko'rinadi — vaqt hisobi shundan boshlanadi.
+      campaign.publishedAt = now;
+      campaign.notifiedAllAt = undefined;
+    } else {
+      campaign.payment = {
+        ...campaign.payment,
+        status: 'pending',
+        paidAt: undefined,
+        confirmedBy: undefined,
+        note: note || undefined,
+      };
+      campaign.publishedAt = undefined;
+      campaign.notifiedAllAt = undefined;
+    }
+
+    db.campaigns = db.campaigns.map((c) => (c.id === campaign.id ? campaign : c));
+
+    logAction({
+      admin,
+      action: action === 'confirm' ? "E'lon to'lovi tasdiqlandi" : "E'lon to'lovi bekor qilindi",
+      targetType: 'campaign',
+      targetId: campaign.id,
+      targetLabel: `${campaign.title} — ${campaign.brandName}`,
+      reason: note || undefined,
+    });
+
+    await persist();
+
+    if (action === 'confirm') {
+      // Birinchi 15 daqiqa — faqat ptichkalilarga, xuddi oddiy e'lon kabi.
+      const earlyAudience = [
+        ...db.brands.map((b) => b.id),
+        ...db.bloggers.filter((b) => b.isVerified).map((b) => b.id),
+      ];
+      broadcast({ type: 'campaign:new', campaign }, earlyAudience);
+      void notify.newCampaign(campaign, true);
+      void notify.campaignPaymentConfirmed(campaign);
+    } else {
+      broadcast({ type: 'campaign:deleted', campaignId: campaign.id });
+    }
+
+    res.json({ ok: true, payment: campaign.payment });
   }),
 );

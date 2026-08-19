@@ -20,6 +20,8 @@ delete process.env.DATABASE_URL;
 // Bot sinovi ro'yxatdan o'tish oqig'ini tekshiradi, admin tasdig'ini emas —
 // tasdiq talabi alohida sinovda (`approval-selftest`) tekshiriladi.
 process.env.REQUIRE_APPROVAL = 'false';
+// E'lon to'lovi alohida sinovda (`payment-selftest`) tekshiriladi.
+process.env.CAMPAIGN_PRICE = '0';
 process.env.TELEGRAM_BOT_TOKEN = 'TEST:TOKEN';
 process.env.ADMIN_SETUP_CODE = 'TESTCODE';
 // HTTPS manzil — Mini App tugmalari sinovi uchun.

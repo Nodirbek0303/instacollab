@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   // tekshiriladi va bu sinovda faqat xalaqit berardi.
   harness = await startTestServer({
     port: 34568,
-    env: { ADMIN_PHONES: ADMIN_PHONE, EARLY_ACCESS_MINUTES: '0', REQUIRE_APPROVAL: 'false' },
+    env: { ADMIN_PHONES: ADMIN_PHONE, EARLY_ACCESS_MINUTES: '0', REQUIRE_APPROVAL: 'false', CAMPAIGN_PRICE: '0' },
   });
 
   const admin = harness.session('admin');

@@ -179,6 +179,7 @@ npm run test:visibility  # kim kimni ko'radi (24 ta tekshiruv, `npm run build` t
 npm run test:admin       # admin paneli va moderatsiya (49 ta tekshiruv)
 npm run test:community   # statistika, obuna, ptichka (53 ta tekshiruv)
 npm run test:approval    # ro'yxatdan o'tish va admin tasdig'i (30 ta tekshiruv)
+npm run test:payment     # e'lon to'lovi (34 ta tekshiruv)
 npm run build         # frontend + server bundle -> dist/
 npm start             # tayyor bundle'ni ishga tushirish
 ```
@@ -212,6 +213,7 @@ npm start             # tayyor bundle'ni ishga tushirish
 | `PATCH` | `/api/admin/accounts/:id` | **admin** | Tasdiqlash / rad etish / muzlatish / o'chirish / qayta tiklash |
 | `POST` | `/api/admin/accounts/:id/reset-password` | **admin** | Parolni tiklash |
 | `PATCH` | `/api/admin/campaigns/:id` | **admin** | E'lonni yashirish / o'chirish / qaytarish |
+| `PATCH` | `/api/admin/campaigns/:id/payment` | **admin** | E'lon to'lovini tasdiqlash / bekor qilish |
 | `PATCH` | `/api/admin/reports/:id` | **admin** | Shikoyatni yopish |
 | `POST` | `/api/follows` | bloger | Obuna bo'lish / bekor qilish |
 | `POST` | `/api/verification/request` | bloger | Ptichka so'rash |
@@ -276,6 +278,42 @@ begona odam raqamlarni sinab, kim ro'yxatdan o'tganini bilib olardi.
 
 `ADMIN_CONTACT` berilmasa, admin hisobining Telegram username'i ishlatiladi; u ham bo'lmasa
 foydalanuvchi botga yo'naltiriladi.
+
+## E'lon narxi
+
+Har bir reklama e'loni joylash **pullik**: standart narx 10 000 so'm.
+
+### Oqim
+
+1. Reklama beruvchi e'lonni to'ldiradi. Forma pastida narx ko'rinadi, tugma ham
+   **«E'lonni joylash — 10 000 so'm»** deb turadi.
+2. E'lon saqlanadi, lekin **bozorga chiqmaydi**: uni faqat egasi ko'radi va kartasida
+   «To'lov kutilmoqda» yozuvi turadi.
+3. Adminga Telegram orqali xabar boradi: qaysi e'lon, qaysi brend, qancha summa.
+4. To'lov kelgach admin panelda **«To'lov qabul qilindi — e'lonni chiqarish»** bosadi.
+5. E'lon bozorga chiqadi, egasiga Telegramga xabar boradi.
+
+### Muhim tafsilot: vaqt hisobi
+
+`publishedAt` e'lon **yaratilganda emas, to'lov tasdiqlangan paytda** qo'yiladi. Aks holda
+ptichkali blogerlarning 15 daqiqalik ustunligi e'lon to'lovni kutib turgan vaqtda yonib
+ketardi va tasdiqlangan zahoti hamma bir vaqtda ko'rardi.
+
+### To'lanmagan e'lon nima qila olmaydi
+
+Bozorda ko'rinmaydi, botdagi ro'yxatga chiqmaydi va **unga ariza yuborib bo'lmaydi** —
+id'ni bilib turib ham `404` qaytadi. Egasi esa o'zinikini har doim ko'radi.
+
+To'lov keyin bekor qilinsa e'lon bozordan qaytib olinadi.
+
+### Sozlash
+
+```
+CAMPAIGN_PRICE=10000     # so'mda. 0 — e'lon bepul va darhol chiqadi
+```
+
+Narx e'lon yaratilgan paytda yozuvga saqlanadi, shuning uchun narxni o'zgartirsangiz
+eski e'lonlar o'zgarmaydi.
 
 ## Bloger hamjamiyati
 
@@ -427,6 +465,7 @@ uzmasligi uchun har 25 soniyada bo'sh signal yuboriladi. Ilova fondan qaytganda
 | `VERIFICATION_PRICE` | Ptichka narxi — blogerga ko'rsatiladigan matn. Berilmasa ko'rsatilmaydi |
 | `ADMIN_CONTACT` | To'lov uchun murojaat qilinadigan Telegram username'i |
 | `REQUIRE_APPROVAL` | `false` — yangi hisoblar admin tasdig'ini kutmaydi (standart: kutadi) |
+| `CAMPAIGN_PRICE` | Bitta e'lon joylash narxi so'mda (standart 10 000). `0` — bepul |
 | `DATABASE_URL` | Postgres manzili. Berilsa — ma'lumotlar shu yerda saqlanadi |
 | `BOT_MODE` | `polling` deb yozilsa, HTTPS bo'lsa ham long polling ishlatiladi |
 | `HOST` | Ilova qaysi manzilda tinglaydi (proksi ortida `127.0.0.1`) |

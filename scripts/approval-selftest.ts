@@ -25,7 +25,7 @@ async function main(): Promise<void> {
    */
   harness = await startTestServer({
     port: 34571,
-    env: { ADMIN_PHONES: ADMIN_PHONE, REQUIRE_APPROVAL: 'false' },
+    env: { ADMIN_PHONES: ADMIN_PHONE, REQUIRE_APPROVAL: 'false', CAMPAIGN_PRICE: '0' },
   });
 
   const admin = harness.session('admin');
@@ -47,7 +47,7 @@ async function main(): Promise<void> {
 
   harness = await startTestServer({
     port: 34572,
-    env: { ADMIN_PHONES: ADMIN_PHONE, ADMIN_CONTACT: '@sinov_admin' },
+    env: { ADMIN_PHONES: ADMIN_PHONE, ADMIN_CONTACT: '@sinov_admin', CAMPAIGN_PRICE: '0' },
   });
 
   const admin2 = harness.session('admin');
@@ -137,7 +137,7 @@ async function main(): Promise<void> {
    */
   harness = await startTestServer({
     port: 34573,
-    env: { ADMIN_PHONES: ADMIN_PHONE, ADMIN_CONTACT: '@sinov_admin', REQUIRE_APPROVAL: 'false' },
+    env: { ADMIN_PHONES: ADMIN_PHONE, ADMIN_CONTACT: '@sinov_admin', REQUIRE_APPROVAL: 'false', CAMPAIGN_PRICE: '0' },
   });
   const dataDir = harness.dataDir;
 
@@ -153,7 +153,7 @@ async function main(): Promise<void> {
 
   harness = await startTestServer({
     port: 34574,
-    env: { ADMIN_PHONES: ADMIN_PHONE, ADMIN_CONTACT: '@sinov_admin' },
+    env: { ADMIN_PHONES: ADMIN_PHONE, ADMIN_CONTACT: '@sinov_admin', CAMPAIGN_PRICE: '0' },
     dataDir,
   });
 

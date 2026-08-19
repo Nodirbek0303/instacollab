@@ -13,6 +13,7 @@ import {
   Search,
   Send,
   Send as TelegramIcon,
+  CreditCard,
   Flag,
   ShieldAlert,
   Trash2,
@@ -21,7 +22,7 @@ import {
 
 import type { BloggerProfile, BrandProfile, Campaign, ProposalBid, UserRole } from '../types';
 import { NICHE_FILTERS } from '../types';
-import { formatFollowers, formatTimestamp, instagramUrl, telegramUrl } from '../lib/format';
+import { formatFollowers, formatTimestamp, instagramUrl, telegramUrl, formatUzs } from '../lib/format';
 import { ApiError } from '../lib/api';
 import { Modal } from './Modal';
 import { PhoneDialog } from './PhoneDialog';
@@ -367,8 +368,39 @@ export function CampaignMarketplace({
                 return (
                   <article
                     key={campaign.id}
-                    className="bg-white border border-purple-100 rounded-3xl p-6 shadow-md shadow-purple-950/5 space-y-4"
+                    className={`bg-white border rounded-3xl p-6 shadow-md shadow-purple-950/5 space-y-4 ${
+                      campaign.payment?.status === 'pending'
+                        ? 'border-violet-200'
+                        : campaign.moderation && campaign.moderation.state !== 'ok'
+                          ? 'border-amber-200'
+                          : 'border-purple-100'
+                    }`}
                   >
+                    {/* To'lov kutilmoqda — e'lon hali bozorda emas. */}
+                    {campaign.payment?.status === 'pending' && (
+                      <p className="text-[11px] font-bold text-violet-900 bg-violet-50 border border-violet-200 rounded-2xl px-3 py-2.5 flex items-start gap-2">
+                        <CreditCard className="w-4 h-4 text-violet-600 shrink-0 mt-px" aria-hidden="true" />
+                        <span>
+                          <strong>To'lov kutilmoqda — {formatUzs(campaign.payment.amount)}.</strong> E'lon
+                          hozircha bozorda ko'rinmaydi va blogerlar ariza yubora olmaydi. Administrator
+                          to'lovni tasdiqlagach avtomatik chiqadi.
+                        </span>
+                      </p>
+                    )}
+
+                    {/* Admin yashirgan bo'lsa — sababi bilan. */}
+                    {campaign.moderation && campaign.moderation.state !== 'ok' && (
+                      <p className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2.5 flex items-start gap-2">
+                        <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-px" aria-hidden="true" />
+                        <span>
+                          {campaign.moderation.state === 'hidden'
+                            ? "Bu e'lon administrator tomonidan yashirilgan."
+                            : "Bu e'lon administrator tomonidan o'chirilgan."}
+                          {campaign.moderation.reason ? ` Sabab: ${campaign.moderation.reason}` : ''}
+                        </span>
+                      </p>
+                    )}
+
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 border-b border-purple-100">
                       <div>
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -839,6 +871,17 @@ export function CampaignMarketplace({
                         <p className="text-[11px] font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-1.5 flex items-start gap-1.5">
                           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden="true" />
                           <span>{issue}</span>
+                        </p>
+                      )}
+
+                      {/* To'lov kutilmoqda — e'lon hali bozorda emas. */}
+                      {campaign.payment?.status === 'pending' && (
+                        <p className="text-[11px] font-bold text-violet-900 bg-violet-50 border border-violet-200 rounded-2xl px-3 py-2 mb-3 flex items-start gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5 text-violet-600 shrink-0 mt-px" aria-hidden="true" />
+                          <span>
+                            To'lov kutilmoqda ({formatUzs(campaign.payment.amount)}). E'lon
+                            tasdiqlangach bozorga chiqadi — hozircha uni faqat siz ko'rasiz.
+                          </span>
                         </p>
                       )}
 

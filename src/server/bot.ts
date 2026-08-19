@@ -41,6 +41,7 @@ import {
 import { createAccount, generateTempPassword, hashPassword, revokeAllSessions } from './auth';
 import { adminPhones, isAdminTelegramId } from './admin';
 import { canBloggerSeeCampaign, sortBidsForBrand, statsFor } from './community';
+import { isCampaignPaid } from './status';
 import { normalizePhone, prettyPhone, str } from './validate';
 
 /* ------------------------------------------------------------------ */
@@ -386,12 +387,14 @@ function bloggersPage(page: number, showContacts: boolean): { text: string; keyb
 /**
  * Ko'rish huquqi bo'yicha filtrlangan e'lonlar.
  *
- * Ikki qoida: admin yashirgan e'lon hech kimga ko'rinmaydi, ptichkasiz
- * bloger esa yangi e'lonni 15 daqiqa kechroq ko'radi — saytdagi bilan
- * bir xil, shunda bot boshqa narsa ko'rsatib qo'ymaydi.
+ * Uch qoida: admin yashirgan va to'lanmagan e'lon hech kimga ko'rinmaydi,
+ * ptichkasiz bloger esa yangi e'lonni 15 daqiqa kechroq ko'radi — saytdagi
+ * bilan bir xil, shunda bot boshqa narsa ko'rsatib qo'ymaydi.
  */
 function visibleCampaignsFor(viewer: Viewer): Campaign[] {
-  const open = db.campaigns.filter((campaign) => (campaign.moderation?.state ?? 'ok') === 'ok');
+  const open = db.campaigns.filter(
+    (campaign) => (campaign.moderation?.state ?? 'ok') === 'ok' && isCampaignPaid(campaign),
+  );
 
   if (viewer.account?.role !== 'blogger') return open;
   return open.filter((campaign) => canBloggerSeeCampaign(campaign, viewer.account!.profileId));
@@ -1636,6 +1639,43 @@ export const notify = {
     for (const account of targets.slice(0, 50)) {
       await sendToAccount(account, [heading, '', campaignCard(campaign)].join('\n'));
     }
+  },
+
+  /**
+   * Yangi e'lon to'lov kutmoqda — adminlarga.
+   *
+   * E'lon hali bozorda yo'q, shuning uchun blogerlarga xabar yubormaymiz:
+   * ular ko'ra olmaydigan narsa haqida bildirishnoma olmasligi kerak.
+   */
+  async campaignAwaitingPayment(campaign: Campaign, price: number): Promise<void> {
+    if (!botInfo.enabled) return;
+
+    const text = [
+      '💳 <b>Yangi e‘lon — to‘lov kutilmoqda</b>',
+      '',
+      `📢 ${esc(campaign.title)}`,
+      `🏢 ${esc(campaign.brandName)}`,
+      `💰 ${formatUzs(price)}`,
+      `📞 ${esc(campaign.phone)} · ${esc(campaign.contactTelegram)}`,
+      '',
+      'To‘lov kelgach admin panelida tasdiqlang — e‘lon shundan keyin bozorga chiqadi.',
+    ].join('\n');
+
+    for (const telegramId of db.supportAdmins) await send(telegramId, text);
+  },
+
+  /** To'lov tasdiqlandi — e'lon egasiga. */
+  async campaignPaymentConfirmed(campaign: Campaign): Promise<void> {
+    await sendToAccount(
+      accountByProfileId(campaign.brandId),
+      [
+        '✅ <b>To‘lov qabul qilindi!</b>',
+        '',
+        `E‘loningiz bozorga chiqdi: <b>${esc(campaign.title)}</b>`,
+        '',
+        'Endi blogerlar uni ko‘radi va ariza yubora boshlaydi.',
+      ].join('\n'),
+    );
   },
 
   /** Yangi obunachi — blogerga. */

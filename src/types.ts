@@ -152,13 +152,35 @@ export interface Campaign {
   /** Admin qarori. Yo'q bo'lsa — tekshiruvdan o'tmagan, lekin ko'rinadi. */
   moderation?: Moderation;
   /**
-   * E'lon aniq qachon joylangani (ISO). `createdDate` faqat ko'rsatish uchun,
-   * bu esa hisob-kitob uchun: ptichkali blogerlar e'lonni shu vaqtdan
-   * boshlab ko'radi, qolganlar EARLY_ACCESS_MINUTES dan keyin.
+   * E'lon qachon bozorga chiqqani (ISO).
+   *
+   * Yaratilgan vaqt emas, **ko'rina boshlagan** vaqt: to'lov talab qilinsa
+   * u tasdiqlangan paytda qo'yiladi. Aks holda ptichkali blogerlarning
+   * 15 daqiqalik ustunligi to'lov kutilayotgan vaqtda yonib ketardi.
    */
   publishedAt?: string;
+  /** To'lov holati. Yo'q bo'lsa — to'lov talab qilinmagan (bepul rejim). */
+  payment?: CampaignPayment;
   /** Kechiktirilgan xabar hammaga yuborilgan vaqt — takror yuborilmasligi uchun. */
   notifiedAllAt?: string;
+}
+
+/**
+ * E'lon uchun to'lov.
+ *
+ * To'lovning o'zi kod ichida emas: reklama beruvchi adminga yozib to'laydi,
+ * admin esa panelda tasdiqlaydi. Bu yozuv shu jarayonni kuzatib boradi.
+ */
+export interface CampaignPayment {
+  status: 'pending' | 'paid';
+  /** So'mda. E'lon yaratilgan paytdagi narx saqlanadi — narx keyin
+   *  o'zgarsa ham eski e'lonlar o'zgarmaydi. */
+  amount: number;
+  requestedAt: string;
+  paidAt?: string;
+  /** To'lovni tasdiqlagan admin hisobining id'si. */
+  confirmedBy?: string;
+  note?: string;
 }
 
 /**

@@ -92,6 +92,15 @@ export interface AppConfig {
   telegramBotUrl: string | null;
   /** To'lov uchun murojaat qilinadigan Telegram username'i (@ siz). */
   adminContact: string | null;
+  /** Bitta e'lon joylash narxi (so'm). 0 — bepul. */
+  campaignPrice: number;
+}
+
+/** E'lon yaratilgach to'lov kutilsa server shuni qo'shib qaytaradi. */
+export interface CampaignCreated extends Campaign {
+  awaitingPayment?: boolean;
+  price?: number;
+  adminContact?: string | null;
 }
 
 /** Ro'yxatdan o'tish tasdiq kutayotgan bo'lsa server shuni qaytaradi. */
@@ -133,7 +142,8 @@ export const api = {
   updateBlogger: (id: string, input: BloggerProfile) =>
     request<BloggerProfile>(`/api/bloggers/${encodeURIComponent(id)}`, patch(input)),
 
-  createCampaign: (input: Record<string, unknown>) => request<Campaign>('/api/campaigns', post(input)),
+  createCampaign: (input: Record<string, unknown>) =>
+    request<CampaignCreated>('/api/campaigns', post(input)),
 
   deleteCampaign: (id: string) =>
     request<{ ok: true }>(`/api/campaigns/${encodeURIComponent(id)}`, { method: 'DELETE' }),
@@ -186,6 +196,9 @@ export const api = {
       patch({ decision, note }),
     ),
 
+  adminCampaignPayment: (id: string, action: 'confirm' | 'revoke', note?: string) =>
+    request<{ ok: true }>(`/api/admin/campaigns/${encodeURIComponent(id)}/payment`, patch({ action, note })),
+
   adminSetVerification: (bloggerId: string, action: 'grant' | 'revoke', reason?: string) =>
     request<{ ok: true; isVerified: boolean }>(
       `/api/admin/verification/${encodeURIComponent(bloggerId)}`,
@@ -223,6 +236,8 @@ export interface AdminAccountRow {
 
 export interface AdminCampaignRow extends Campaign {
   moderationState: ModerationState;
+  paymentStatus: 'pending' | 'paid' | null;
+  paymentAmount: number | null;
   reportsCount: number;
   ownerStatus: AccountStatus;
 }

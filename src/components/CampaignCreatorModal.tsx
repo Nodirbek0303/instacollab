@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Building2, Instagram, Phone, Plus, Send, Send as TelegramIcon, X } from 'lucide-react';
+import { Building2, CreditCard, Instagram, Phone, Plus, Send, Send as TelegramIcon, X } from 'lucide-react';
 
 import type { BrandProfile, CampaignFormat } from '../types';
 import { CAMPAIGN_FORMATS, NICHES } from '../types';
 import { ApiError } from '../lib/api';
+import { formatUzs } from '../lib/format';
 import { Modal } from './Modal';
 
 interface CampaignCreatorModalProps {
@@ -11,6 +12,8 @@ interface CampaignCreatorModalProps {
   onClose: () => void;
   currentBrand: BrandProfile;
   onCreateCampaign: (input: Record<string, unknown>) => Promise<void>;
+  /** Bitta e'lon joylash narxi (so'm). 0 — bepul. */
+  price?: number;
 }
 
 const inputClass =
@@ -24,6 +27,7 @@ export function CampaignCreatorModal({
   onClose,
   currentBrand,
   onCreateCampaign,
+  price = 0,
 }: CampaignCreatorModalProps) {
   // MUHIM: barcha hooklar erta `return`dan oldin chaqiriladi (React Hooks qoidasi).
   const [contactInstagram, setContactInstagram] = useState('');
@@ -365,6 +369,16 @@ export function CampaignCreatorModal({
           </ul>
         </div>
 
+        {price > 0 && (
+          <p className="mt-4 text-xs font-bold text-violet-900 bg-violet-50 border border-violet-200 rounded-2xl px-3.5 py-3 flex items-start gap-2">
+            <CreditCard className="w-4 h-4 text-violet-600 shrink-0 mt-px" aria-hidden="true" />
+            <span>
+              E'lon joylash narxi — {formatUzs(price)}. E'lon saqlanadi va administrator
+              to'lovni tasdiqlagach bozorga chiqadi.
+            </span>
+          </p>
+        )}
+
         <div className="pt-4 border-t border-purple-100 flex items-center justify-end gap-3">
           <button
             type="button"
@@ -380,7 +394,13 @@ export function CampaignCreatorModal({
             className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600 via-purple-600 to-pink-600 hover:from-violet-700 hover:via-purple-700 hover:to-pink-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold shadow-lg shadow-purple-600/25 transition flex items-center gap-1.5 cursor-pointer"
           >
             <Send className="w-3.5 h-3.5 text-pink-200" aria-hidden="true" />
-            <span>{isSubmitting ? 'Joylanmoqda…' : "E'lonni joylashtirish"}</span>
+            <span>
+              {isSubmitting
+                ? 'Joylanmoqda…'
+                : price > 0
+                  ? `E'lonni joylash — ${formatUzs(price)}`
+                  : "E'lonni joylashtirish"}
+            </span>
           </button>
         </div>
       </form>

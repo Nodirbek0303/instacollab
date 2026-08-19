@@ -255,6 +255,20 @@ o'chirmoqchi bo'lsangiz:
 REQUIRE_APPROVAL=false
 ```
 
+## E'lon narxi
+
+Standart holatda har bir e'lon 10 000 so'm turadi. O'zgartirish uchun Render → Environment:
+
+```
+CAMPAIGN_PRICE=10000
+```
+
+`0` qo'ysangiz e'lonlar bepul bo'ladi va darhol bozorga chiqadi.
+
+E'lon joylanganda sizga botga xabar keladi. To'lovni olgach admin panelining «E'lonlar»
+bo'limida **«To'lov qabul qilindi — e'lonni chiqarish»** tugmasini bosasiz — e'lon shundan
+keyin bozorga chiqadi.
+
 ## Ptichka narxini ko'rsatish (ixtiyoriy)
 
 Render → Environment:

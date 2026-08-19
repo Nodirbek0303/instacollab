@@ -4,6 +4,7 @@ import {
   BadgeCheck,
   Ban,
   CheckCircle2,
+  CreditCard,
   Eye,
   EyeOff,
   Flag,
@@ -235,6 +236,7 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
   const openReports = data.reports.filter((report) => !report.resolvedAt);
   const pendingVerifications = data.verificationRequests.filter((r) => r.status === 'pending');
   const pendingAccounts = data.accounts.filter((row) => row.status === 'pending');
+  const unpaidCampaigns = data.campaigns.filter((row) => row.paymentStatus === 'pending');
 
   return (
     <div className="space-y-5">
@@ -261,7 +263,9 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
                 ? pendingVerifications.length
                 : id === 'accounts'
                 ? pendingAccounts.length || data.accounts.length
-                : 0;
+                : id === 'campaigns'
+                  ? unpaidCampaigns.length
+                  : 0;
           return (
             <button
               key={id}
@@ -284,7 +288,7 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
                       ? 'bg-rose-500 text-white'
                       : id === 'verified'
                         ? 'bg-violet-600 text-white'
-                        : id === 'accounts' && pendingAccounts.length > 0
+                        : (id === 'accounts' && pendingAccounts.length > 0) || id === 'campaigns'
                           ? 'bg-amber-500 text-white'
                           : 'bg-purple-100 text-purple-900'
                   }`}
@@ -319,6 +323,7 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
             { label: 'Blogerlar', value: data.stats.bloggers, tone: 'violet' },
             { label: "E'lonlar", value: data.stats.campaigns, tone: 'violet' },
             { label: 'Yashirilgan', value: data.stats.hiddenCampaigns, tone: 'amber' },
+            { label: "To'lov kutmoqda", value: data.stats.unpaidCampaigns, tone: 'amber' },
             { label: 'Arizalar', value: data.stats.bids, tone: 'violet' },
             { label: 'Xabarlar', value: data.stats.messages, tone: 'violet' },
             { label: 'Ochiq shikoyat', value: data.stats.openReports, tone: 'rose' },
@@ -571,6 +576,57 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
       {/* ---------- E'lonlar ---------- */}
       {section === 'campaigns' && (
         <div className="space-y-2.5">
+          {/* To'lov kutayotganlar eng tepada — ular chiqishni kutib turibdi. */}
+          {unpaidCampaigns.length > 0 && !query.trim() && (
+            <div className="bg-violet-50 border border-violet-200 rounded-2xl p-4 mb-1">
+              <h3 className="text-xs font-black text-violet-900 uppercase tracking-wider mb-2.5">
+                To'lov kutmoqda ({unpaidCampaigns.length})
+              </h3>
+
+              <div className="space-y-2">
+                {unpaidCampaigns.map((row) => (
+                  <div key={row.id} className="bg-white border border-violet-200 rounded-2xl p-3.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <CreditCard className="w-4 h-4 text-violet-600" aria-hidden="true" />
+                      <h4 className="text-sm font-black text-slate-900">{row.title}</h4>
+                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-violet-600 text-white tabular-nums">
+                        {(row.paymentAmount ?? 0).toLocaleString('uz-UZ')} so'm
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 font-semibold mt-1 tabular-nums">
+                      {row.brandName} · {row.niche} · 📞 {row.phone} · ✈️ {row.contactTelegram}
+                    </p>
+
+                    <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-purple-50">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void perform(async () => {
+                            await api.adminCampaignPayment(row.id, 'confirm');
+                            return `«${row.title}» bozorga chiqdi`;
+                          })
+                        }
+                        className="flex items-center gap-1.5 text-[11px] font-black px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                        To'lov qabul qilindi — e'lonni chiqarish
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => campaignAction(row.id, row.title, 'delete')}
+                        className="text-[11px] font-black px-3 py-2 rounded-xl bg-white text-rose-800 border border-rose-200 hover:bg-rose-50 transition cursor-pointer"
+                      >
+                        O'chirish
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {campaigns.length === 0 && (
             <p className="text-sm text-slate-500 font-semibold text-center py-8">Hech narsa topilmadi.</p>
           )}
@@ -583,7 +639,9 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
                   ? 'border-rose-200 bg-rose-50/30'
                   : row.moderationState === 'hidden'
                     ? 'border-amber-200 bg-amber-50/30'
-                    : row.reportsCount > 0
+                    : row.paymentStatus === 'pending'
+                      ? 'border-violet-200 bg-violet-50/30'
+                      : row.reportsCount > 0
                       ? 'border-rose-200'
                       : 'border-purple-100'
               }`}
@@ -605,6 +663,11 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
                 {row.moderationState === 'deleted' && (
                   <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-rose-600 text-white">
                     O'CHIRILGAN
+                  </span>
+                )}
+                {row.paymentStatus === 'pending' && (
+                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-violet-600 text-white">
+                    TO'LOV KUTMOQDA
                   </span>
                 )}
                 {row.ownerStatus !== 'active' && (
@@ -630,6 +693,43 @@ export function AdminPanel({ onToast }: AdminPanelProps) {
               )}
 
               <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-purple-50">
+                {row.paymentStatus === 'pending' && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void perform(async () => {
+                        await api.adminCampaignPayment(row.id, 'confirm');
+                        return `«${row.title}» bozorga chiqdi`;
+                      })
+                    }
+                    className="flex items-center gap-1.5 text-[11px] font-black px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                    To'lovni tasdiqlash
+                  </button>
+                )}
+
+                {row.paymentStatus === 'paid' && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      ask({
+                        title: "To'lovni bekor qilish",
+                        hint: `«${row.title}» bozordan olinadi va yana to'lov kutish holatiga qaytadi.`,
+                        reasonRequired: false,
+                        run: (text) =>
+                          perform(async () => {
+                            await api.adminCampaignPayment(row.id, 'revoke', text);
+                            return "To'lov bekor qilindi";
+                          }),
+                      })
+                    }
+                    className="text-[11px] font-black px-3 py-2 rounded-xl bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    To'lovni bekor qilish
+                  </button>
+                )}
+
                 {row.moderationState === 'ok' ? (
                   <button
                     type="button"
