@@ -206,6 +206,21 @@ o'zgarmas bo'lgani uchun brauzer uni bir yil keshlaydi.
 Server tekshiruvlari: tur (faqat JPG/PNG/WEBP), hajm (3 MB gacha) va **sarlavha baytlari** —
 ya'ni `.png` deb nomlangan matn fayli o'tib ketmaydi.
 
+## Real vaqtda yangilanish
+
+Sahifani qo'lda yangilash kerak emas. Kirgandan keyin brauzer `GET /api/events`
+manziliga bitta uzoq ulanish ochadi (Server-Sent Events) va server har bir
+o'zgarishni o'zi yuboradi: yangi e'lon, ariza, ariza holati, chat xabari,
+profil o'zgarishi. Sarlavha yonidagi yashil nuqta ulanish tirikligini bildiradi.
+
+Maxfiylik: shaxsiy voqealar hammaga tarqalmaydi. Arizadagi aloqa ma'lumotlari
+va chat xabarlari faqat ikki tomonga — e'lon egasiga va blogerga — yuboriladi.
+E'lonlar va profillar esa ochiq, shuning uchun hammaga boradi.
+
+Ulanish uzilsa brauzer o'zi qayta ulanadi. Proksilar jim turgan ulanishni
+uzmasligi uchun har 25 soniyada bo'sh signal yuboriladi. Ilova fondan qaytganda
+(telefon ekrani o'chib yongandan keyin) ma'lumot bir marta to'liq qayta o'qiladi.
+
 ## Muhit o'zgaruvchilari
 
 | O'zgaruvchi | Vazifasi |

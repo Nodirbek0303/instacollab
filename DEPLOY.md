@@ -218,6 +218,15 @@ foydalaning — u ilovaning o'zi orqali ishlagani uchun bunday muammo bo'lmaydi.
 
 ---
 
+## Ishga tushish tartibi
+
+Server portni **birinchi** ochadi, bazaga esa keyin ulanadi. Neon tekin tarifda
+uxlab qolgani uchun ulanish bir necha soniya (ba'zan ko'proq) davom etadi —
+agar port shu vaqtgacha ochilmasa, Render "port ochilmadi" deb deploy'ni bekor
+qiladi. Tayyor bo'lmagan paytda `/api/...` so'rovlariga 503 qaytadi, sahifada
+esa o'zi yangilanadigan "Server ishga tushmoqda…" yozuvi turadi. `/api/health`
+har doim javob beradi.
+
 ## Muammolarni hal qilish
 
 | Muammo | Sabab va yechim |
