@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #FDF7FF;
+    color: #1e1b4b;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e9d5ff;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #d8b4fe;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Telegram Mini App ichida ochilganda: tepadagi tizim paneli ostida qolib ketmasin. */
+.in-telegram body {
+  padding-top: env(safe-area-inset-top);
+}
+
+.in-telegram .tg-hidden {
+  display: none !important;
+}

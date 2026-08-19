@@ -1,0 +1,35 @@
+# Render uchun "Blueprint" — https://render.com/docs/blueprint-spec
+#
+# Render'da:  New → Blueprint → repozitoriyni tanlang → Apply
+#
+# Ma'lumotlar Postgres'da saqlanadi (DATABASE_URL), chunki Render'ning tekin
+# tarifida disk saqlanmaydi. Bot webhook rejimida ishlaydi — xizmat uxlab
+# qolsa ham Telegram xabar yuborganda o'zi uyg'onadi.
+#
+# RENDER_EXTERNAL_URL ni Render o'zi beradi — ilova shundan Mini App va
+# webhook manzilini oladi, qo'lda yozish shart emas.
+
+services:
+  - type: web
+    name: instacollab
+    runtime: node
+    plan: free
+    region: frankfurt          # O'zbekistonga eng yaqin tekin mintaqa
+    branch: main
+
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Quyidagilar Render panelida qo'lda kiritiladi (sirlar repozitoriyga tushmaydi).
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: ADMIN_SETUP_CODE
+        sync: false
+      - key: DATABASE_URL
+        sync: false
