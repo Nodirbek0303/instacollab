@@ -29,6 +29,7 @@ import {
 import { HttpError, handle, normalizePhone, num, oneOf, str, strList } from './validate';
 import { notify, botInfo } from './bot';
 import { verifyInitData } from './miniapp';
+import { addClient, broadcast, connectedClients, startHeartbeat } from './events';
 import {
   MAX_IMAGE_BYTES,
   imageId,
@@ -79,6 +80,8 @@ export function startCleanupTimer(): void {
     }
   }, 60_000);
   timer.unref();
+
+  startHeartbeat();
 }
 
 const readLimit = rateLimit(240, 'read');
@@ -107,7 +110,28 @@ api.get('/config', readLimit, (_req, res) => {
     telegramBot: botInfo.username ? `@${botInfo.username}` : null,
     telegramBotUrl: botInfo.username ? `https://t.me/${botInfo.username}` : null,
     demoMode: process.env.NODE_ENV !== 'production',
+    liveClients: connectedClients(),
   });
+});
+
+/* ---------- Jonli yangilanishlar ---------- */
+
+/**
+ * Uzoq ulanish: server o'zgarish bo'lishi bilan xabar yuboradi.
+ * Brauzerdagi `EventSource` uzilganda o'zi qayta ulanadi.
+ */
+api.get('/events', (req, res) => {
+  const account = requireAccount(req);
+
+  res.status(200);
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  // Nginx kabi proksilar javobni bufer qilmasin — aks holda xabarlar kechikadi.
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  addClient(res, account.id, account.profileId);
 });
 
 /* ---------- Rasmlar ---------- */
@@ -337,6 +361,8 @@ api.patch(
     );
 
     await persist();
+
+    broadcast({ type: 'brand:updated', brand: updated });
     res.json(updated);
   }),
 );
@@ -372,6 +398,8 @@ api.patch(
     );
 
     await persist();
+
+    broadcast({ type: 'blogger:updated', blogger: updated });
     res.json(updated);
   }),
 );
@@ -425,6 +453,7 @@ api.post(
     );
     await persist();
 
+    broadcast({ type: 'campaign:new', campaign });
     void notify.newCampaign(campaign);
     res.status(201).json(campaign);
   }),
@@ -444,6 +473,8 @@ api.delete(
     db.campaigns = db.campaigns.filter((c) => c.id !== campaign.id);
     db.bids = db.bids.filter((b) => b.campaignId !== campaign.id);
     await persist();
+
+    broadcast({ type: 'campaign:deleted', campaignId: campaign.id });
     res.json({ ok: true });
   }),
 );
@@ -492,6 +523,12 @@ api.post(
     db.campaigns = db.campaigns.map((c) => (c.id === campaign.id ? { ...c, bidsCount: c.bidsCount + 1 } : c));
     await persist();
 
+    // Arizada kontaktlar bor — faqat ikkala tomonga yuboriladi.
+    const updatedCampaign = db.campaigns.find((c) => c.id === campaign.id);
+    broadcast(
+      { type: 'bid:new', bid, campaignId: campaign.id, bidsCount: updatedCampaign?.bidsCount ?? 0 },
+      [campaign.brandId, blogger.id],
+    );
     void notify.newBid(bid, campaign);
     res.status(201).json(bid);
   }),
@@ -515,6 +552,7 @@ api.patch(
     db.bids = db.bids.map((b) => (b.id === bid.id ? updated : b));
     await persist();
 
+    broadcast({ type: 'bid:updated', bid: updated }, [campaign.brandId, bid.bloggerId]);
     if (status !== bid.status) void notify.bidStatusChanged(updated);
     res.json(updated);
   }),
@@ -556,6 +594,8 @@ api.post(
 
     db.messages = [...db.messages, message].slice(-5000);
     await persist();
+
+    broadcast({ type: 'message:new', message }, [brand.id, blogger.id]);
 
     const recipientProfileId = account.role === 'advertiser' ? blogger.id : brand.id;
     const recipient = accountByProfileId(recipientProfileId);

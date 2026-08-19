@@ -11,6 +11,7 @@ import type {
 import { ApiError, api, type AppConfig, type RegisterInput } from './lib/api';
 import { cachedState, savedTab } from './lib/storage';
 import { getInitData, initTelegram, isTelegramMiniApp } from './lib/telegram';
+import { applyEvent, connectLive } from './lib/live';
 
 import { AuthScreen } from './components/AuthScreen';
 import { Sidebar } from './components/Sidebar';
@@ -54,6 +55,8 @@ export default function App() {
   });
   const [deepLinkDone, setDeepLinkDone] = useState(false);
   const [highlightCampaignId, setHighlightCampaignId] = useState<string | null>(null);
+  /** Jonli oqim ulanganmi — sarlavhadagi kichik belgi shuni ko'rsatadi. */
+  const [isLive, setIsLive] = useState(false);
 
   /* ---------------- Ma'lumotlar ---------------- */
 
@@ -204,6 +207,44 @@ export default function App() {
     setDeepLinkDone(true);
     window.history.replaceState({}, '', window.location.pathname);
   }, [auth, deepLink, deepLinkDone]);
+
+  /**
+   * Jonli yangilanishlar. Kirgandan keyin ulanamiz, chiqishda uzamiz.
+   * Kelgan har bir voqea mahalliy holatga qo'shiladi — sahifani yangilash shart emas.
+   */
+  useEffect(() => {
+    if (!auth) {
+      setIsLive(false);
+      return;
+    }
+
+    const disconnect = connectLive({
+      onStatus: setIsLive,
+      onEvent: (event) => {
+        setData((prev) => {
+          const next = applyEvent(prev, event);
+          cachedState.save(next);
+          return next;
+        });
+      },
+    });
+
+    return disconnect;
+  }, [auth]);
+
+  /**
+   * Ilova fonga o'tib qaytganda (telefon ekrani o'chib yonganda) uzilib qolgan
+   * bo'lishi mumkin — shunda ma'lumotni bir marta to'liq yangilaymiz.
+   */
+  useEffect(() => {
+    if (!auth) return;
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void loadState();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [auth, loadState]);
 
   useEffect(() => {
     if (!toast) return;
@@ -436,6 +477,7 @@ export default function App() {
           onToggleSidebar={() => setIsSidebarOpen(true)}
           userRole={userRole}
           activeTab={activeTab}
+          isLive={isLive}
           onOpenCreateCampaign={() => setIsCampaignCreatorOpen(true)}
           onOpenAccountModal={() => setIsAccountModalOpen(true)}
           profile={auth.profile}

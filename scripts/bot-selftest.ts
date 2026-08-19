@@ -9,6 +9,14 @@
  * (alohida `data/` katalogida ishlaydi — asosiy bazaga tegmaydi)
  */
 
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+// Sinov o'z vaqtinchalik katalogida ishlaydi — loyihaning haqiqiy `data/`
+// bazasiga tegmaydi, aks holda mavjud telefon raqamlari sinovni yiqitadi.
+process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'instacollab-bot-test-'));
+delete process.env.DATABASE_URL;
 process.env.TELEGRAM_BOT_TOKEN = 'TEST:TOKEN';
 process.env.ADMIN_SETUP_CODE = 'TESTCODE';
 // HTTPS manzil — Mini App tugmalari sinovi uchun.

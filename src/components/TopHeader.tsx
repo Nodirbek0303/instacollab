@@ -10,6 +10,8 @@ interface TopHeaderProps {
   onOpenAccountModal: () => void;
   profile: BrandProfile | BloggerProfile;
   onSelectTab: (tab: string) => void;
+  /** Jonli oqim ulanganmi. */
+  isLive?: boolean;
 }
 
 const TITLES: Record<UserRole, Record<string, string>> = {
@@ -33,6 +35,7 @@ export function TopHeader({
   onOpenAccountModal,
   profile,
   onSelectTab,
+  isLive = false,
 }: TopHeaderProps) {
   const isAdvertiser = userRole === 'advertiser';
   const title = TITLES[userRole][activeTab] ?? (isAdvertiser ? 'Reklama Beruvchi Kabineti' : 'Bloger Kabineti');
@@ -82,7 +85,18 @@ export function TopHeader({
             >
               {isAdvertiser ? 'Reklama Beruvchi' : 'Bloger'}
             </span>
-            <h1 className="text-xs sm:text-sm font-extrabold text-slate-900 truncate leading-tight mt-0.5">{title}</h1>
+            <h1 className="text-xs sm:text-sm font-extrabold text-slate-900 truncate leading-tight mt-0.5 flex items-center gap-1.5">
+              <span className="truncate">{title}</span>
+              {/* Jonli holat: yashil nuqta — yangilanishlar o'zi kelib turibdi */}
+              <span
+                title={isLive ? "Jonli: yangilanishlar o'zi keladi" : 'Ulanish tiklanmoqda…'}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  isLive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+                }`}
+              >
+                <span className="sr-only">{isLive ? 'Jonli ulanish faol' : 'Ulanish yo‘q'}</span>
+              </span>
+            </h1>
           </div>
         </div>
 
