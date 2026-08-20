@@ -388,6 +388,32 @@ async function main(): Promise<void> {
     db.supportAdmins = [ADMIN];
   }
 
+  console.log('\n6b2. Foydalanuvchilar qayd qilinadi');
+  {
+    // Uch xil odam botga murojaat qilgan: asosiy foydalanuvchi, admin va
+    // ro'yxatdan o'tmagan mehmon.
+    const GUEST = 555008;
+    pushMessage('/start', GUEST, { id: GUEST, first_name: 'Mehmon', username: 'mehmon8' });
+    await settle();
+
+    const guest = db.botUsers.find((u) => u.chatId === GUEST);
+    check('mehmon ro‘yxatga olindi', Boolean(guest), db.botUsers.map((u) => u.chatId));
+    check('birinchi ko‘rilgan vaqt yozildi', typeof guest?.firstSeenAt === 'string', guest?.firstSeenAt);
+    check('ismi saqlandi', guest?.username === 'mehmon8', guest?.username);
+
+    const before = guest?.actions ?? 0;
+    pushMessage('/start', GUEST, { id: GUEST, first_name: 'Mehmon', username: 'mehmon8' });
+    await settle();
+    const after = db.botUsers.find((u) => u.chatId === GUEST)?.actions ?? 0;
+    check('harakatlar sanaladi', after > before, { before, after });
+
+    check(
+      'asosiy foydalanuvchi ham ro‘yxatda',
+      db.botUsers.some((u) => u.chatId === CHAT),
+      db.botUsers.map((u) => u.chatId),
+    );
+  }
+
   console.log('\n6c. Ommaviy xabar — hammaga boradi');
   {
     const OUTSIDER = 555009;
@@ -471,6 +497,37 @@ async function main(): Promise<void> {
       'sarlavha bilan bordi',
       photos.every((i) => (i.text ?? '').includes('Rasmli reklama')),
       photos[0]?.text,
+    );
+  }
+
+  console.log('\n6e. Statistika — faqat bot egasiga');
+  {
+    sent.length = 0;
+    pushMessage('📊 Statistika', ADMIN, adminUser);
+    await settle();
+
+    const report = lastText(ADMIN);
+    check('statistika chiqdi', report.includes('Bot statistikasi'), report.slice(0, 120));
+    check('jami foydalanuvchi bor', report.includes('Jami foydalanuvchi'), report.slice(0, 200));
+    check('faollik bo‘limi bor', report.includes('Faollik'), report.slice(0, 200));
+    check('yangi qo‘shilganlar bor', report.includes('Yangi qo‘shilganlar'), report.slice(0, 200));
+    check('platforma raqamlari bor', report.includes('E‘lonlar'), report.slice(0, 400));
+
+    const totalShown = Number(/Jami foydalanuvchi: <b>(\d+)<\/b>/.exec(report)?.[1] ?? -1);
+    check(
+      'jami soni ro‘yxatga mos',
+      totalShown === db.botUsers.length,
+      { korsatilgan: totalShown, haqiqiy: db.botUsers.length },
+    );
+
+    // Oddiy foydalanuvchi statistikani ko'ra olmasligi kerak.
+    sent.length = 0;
+    pushMessage('📊 Statistika');
+    await settle();
+    check(
+      'oddiy foydalanuvchiga ko‘rinmaydi',
+      !lastText().includes('Bot statistikasi'),
+      lastText().slice(0, 120),
     );
   }
 
@@ -590,11 +647,19 @@ async function main(): Promise<void> {
     );
   }
 
-  console.log('\n14. Support statistikasi');
+  console.log('\n14. Statistika oxirgi holatni aks ettiradi');
   sent.length = 0;
   pushMessage('📊 Statistika', ADMIN, adminUser);
   await settle();
-  check('statistika chiqdi', lastText(ADMIN).includes('Platforma statistikasi'), lastText(ADMIN));
+  {
+    const report = lastText(ADMIN);
+    check('statistika chiqdi', report.includes('Bot statistikasi'), report.slice(0, 120));
+    check(
+      'hisoblar soni to‘g‘ri',
+      report.includes(`Hisoblar: <b>${db.accounts.length}</b>`),
+      report.slice(0, 600),
+    );
+  }
 
   stopBot();
   await settle(100);

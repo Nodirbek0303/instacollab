@@ -389,6 +389,30 @@ export interface SupportTicket {
 }
 
 /** Botdagi ko'p bosqichli suhbat holati (ro'yxatdan o'tish, ulash va h.k.). */
+/**
+ * Botdan foydalangan odam.
+ *
+ * `BotSession` dan farqi: u suhbatning joriy qadamini saqlaydi va tozalanishi
+ * mumkin, bu esa **doimiy ro'yxat** — kim qachon /start bosgani, oxirgi marta
+ * qachon foydalangani. Statistika va ommaviy xabar shu ro'yxatga tayanadi.
+ */
+export interface BotUser {
+  chatId: number;
+  firstName?: string;
+  username?: string;
+  /** Birinchi marta botga murojaat qilgan vaqt (ISO). */
+  firstSeenAt: string;
+  /** Oxirgi harakat vaqti (ISO). */
+  lastSeenAt: string;
+  /** Nechta xabar yozgani yoki tugma bosgani. */
+  actions: number;
+  /**
+   * Botni bloklagan. Ommaviy yuborishda aniqlanadi va keyingi safar
+   * unga urinilmaydi — bu vaqtni va Telegram cheklovini tejaydi.
+   */
+  blocked?: boolean;
+}
+
 export interface BotSession {
   chatId: number;
   step: string;
@@ -456,6 +480,7 @@ export interface DatabaseShape extends PlatformState {
   supportAdmins: number[];
   tickets: SupportTicket[];
   botSessions: BotSession[];
+  botUsers: BotUser[];
   reports: CampaignReport[];
   adminLog: AdminAction[];
   follows: Follow[];

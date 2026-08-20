@@ -232,6 +232,122 @@ async function setStep(chatId: number, step: string, draft?: Record<string, unkn
 }
 
 /* ------------------------------------------------------------------ */
+/* Statistika (faqat bot egasi ko'radi)                                */
+/* ------------------------------------------------------------------ */
+
+/** Shuncha kun ichida faol bo'lganlar sanaladi. */
+function activeSince(days: number): number {
+  const edge = Date.now() - days * 24 * 60 * 60 * 1000;
+  return db.botUsers.filter((user) => Date.parse(user.lastSeenAt) >= edge).length;
+}
+
+/** Shuncha kun ichida qo'shilganlar. */
+function joinedSince(days: number): number {
+  const edge = Date.now() - days * 24 * 60 * 60 * 1000;
+  return db.botUsers.filter((user) => Date.parse(user.firstSeenAt) >= edge).length;
+}
+
+/**
+ * Bot va platforma statistikasi.
+ *
+ * Faqat adminga ko'rsatiladi — chaqiruvchi joyda `viewer.isSupport`
+ * tekshiriladi.
+ */
+function botStatsText(): string {
+  const total = db.botUsers.length;
+  const blocked = db.botUsers.filter((user) => user.blocked).length;
+  const linked = db.accounts.filter((a) => a.telegramId != null).length;
+
+  // Botni ochib, lekin ro'yxatdan o'tmaganlar — o'sish uchun zaxira.
+  const linkedChats = new Set(db.accounts.map((a) => a.telegramId).filter((id) => id != null));
+  const guests = db.botUsers.filter((user) => !linkedChats.has(user.chatId)).length;
+
+  const actions = db.botUsers.reduce((sum, user) => sum + user.actions, 0);
+
+  return [
+    '<b>📊 Bot statistikasi</b>',
+    '',
+    `👥 Jami foydalanuvchi: <b>${total}</b>`,
+    `   • ro‘yxatdan o‘tgan: ${linked}`,
+    `   • faqat botni ochgan: ${guests}`,
+    blocked > 0 ? `   • botni bloklagan: ${blocked}` : '',
+    '',
+    '<b>Faollik</b>',
+    `   • bugun: ${activeSince(1)}`,
+    `   • 7 kun ichida: ${activeSince(7)}`,
+    `   • 30 kun ichida: ${activeSince(30)}`,
+    `   • jami harakatlar: ${actions}`,
+    '',
+    '<b>Yangi qo‘shilganlar</b>',
+    `   • bugun: ${joinedSince(1)}`,
+    `   • 7 kun ichida: ${joinedSince(7)}`,
+    '',
+    '<b>📋 Platforma</b>',
+    `👤 Hisoblar: <b>${db.accounts.length}</b>`,
+    `   • reklama beruvchi: ${db.accounts.filter((a) => a.role === 'advertiser').length}`,
+    `   • bloger: ${db.accounts.filter((a) => a.role === 'blogger').length}`,
+    `   • tasdiq kutmoqda: ${db.accounts.filter((a) => a.status === 'pending').length}`,
+    `   • muzlatilgan: ${db.accounts.filter((a) => a.status === 'frozen').length}`,
+    `✅ Ptichkali blogerlar: <b>${db.bloggers.filter((b) => b.isVerified).length}</b>`,
+    `📢 E‘lonlar: <b>${db.campaigns.length}</b>`,
+    `   • to‘lov kutmoqda: ${db.campaigns.filter((c) => c.payment?.status === 'pending').length}`,
+    `📨 Arizalar: <b>${db.bids.length}</b>`,
+    `   • bajarilgan zakaz: ${db.bids.filter((b) => b.status === 'completed').length}`,
+    `💬 Xabarlar: <b>${db.messages.length}</b>`,
+    `👣 Obunalar: <b>${db.follows.length}</b>`,
+    `🚩 Ochiq shikoyatlar: <b>${db.reports.filter((r) => !r.resolvedAt).length}</b>`,
+    `🎫 Ochiq murojaatlar: <b>${db.tickets.filter((t) => t.status === 'open').length}</b>`,
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
+/* ------------------------------------------------------------------ */
+/* Foydalanuvchilarni qayd qilish                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Botga murojaat qilgan odamni ro'yxatga oladi yoki oxirgi faolligini
+ * yangilaydi.
+ *
+ * Har bir xabar va tugma bosishda chaqiriladi — statistika shundan
+ * yig'iladi. Ro'yxat hech qachon tozalanmaydi: «nechta odam /start
+ * bosgan» savoliga javob berish uchun tarix kerak.
+ */
+function touchBotUser(chatId: number, from?: TgUser): void {
+  const now = new Date().toISOString();
+  const existing = db.botUsers.find((item) => item.chatId === chatId);
+
+  if (existing) {
+    existing.lastSeenAt = now;
+    existing.actions += 1;
+    if (from?.username !== undefined) existing.username = from.username;
+    if (from?.first_name !== undefined) existing.firstName = from.first_name;
+    // Yana yozayotgan bo'lsa — demak bloklamagan.
+    if (existing.blocked) existing.blocked = false;
+    return;
+  }
+
+  db.botUsers = [
+    ...db.botUsers,
+    {
+      chatId,
+      firstName: from?.first_name,
+      username: from?.username,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      actions: 1,
+    },
+  ];
+}
+
+/** Bloklaganini belgilaydi — keyingi tarqatishda unga urinilmaydi. */
+function markBlocked(chatId: number): void {
+  const user = db.botUsers.find((item) => item.chatId === chatId);
+  if (user) user.blocked = true;
+}
+
+/* ------------------------------------------------------------------ */
 /* Ommaviy xabar (faqat admin)                                         */
 /* ------------------------------------------------------------------ */
 
@@ -247,14 +363,29 @@ async function setStep(chatId: number, step: string, draft?: Record<string, unkn
 function broadcastAudience(): number[] {
   const chats = new Set<number>();
 
+  // Botga murojaat qilganlarning hammasi — /start bosgani ham yetarli.
+  for (const user of db.botUsers) {
+    if (user.blocked) continue;
+    chats.add(user.chatId);
+  }
+
+  // Telegramga ulangan hisoblar — ro'yxat eskirgan bo'lsa ham qolib
+  // ketmasin (masalan ma'lumot ko'chirilgan bo'lsa).
   for (const account of db.accounts) {
     if (account.telegramId == null) continue;
     if ((account.status ?? 'active') !== 'active') continue;
     chats.add(account.telegramId);
   }
 
+  // Eski o'rnatishlarda `botUsers` bo'lmasligi mumkin — suhbat holatidan
+  // ham olamiz, shunda hech kim tushib qolmaydi.
   for (const session of db.botSessions) {
     if (typeof session.chatId === 'number') chats.add(session.chatId);
+  }
+
+  // Bloklanganlar chiqarib tashlanadi.
+  for (const user of db.botUsers) {
+    if (user.blocked) chats.delete(user.chatId);
   }
 
   return [...chats];
@@ -296,6 +427,11 @@ async function deliver(chatId: number, draft: { text: string; photo?: string }):
 
       if (data.ok) return true;
 
+      if (String(data.description ?? '').includes('bot was blocked')) {
+        markBlocked(chatId);
+        return false;
+      }
+
       const retryAfter = data.parameters?.retry_after;
       if (retryAfter && attempt === 0) {
         await new Promise((resolve) => setTimeout(resolve, Math.min(retryAfter, 30) * 1000));
@@ -328,6 +464,9 @@ async function runBroadcast(draft: { text: string; photo?: string }): Promise<Br
     else failed++;
     await new Promise((resolve) => setTimeout(resolve, BROADCAST_DELAY_MS));
   }
+
+  // Bloklaganlar belgilandi — keyingi safar ularga urinilmaydi.
+  await persist();
 
   return { sent, failed };
 }
@@ -1463,22 +1602,7 @@ async function handleMessage(message: TgMessage): Promise<void> {
 
     case BTN.stats: {
       if (!viewer.isSupport) break;
-      await send(
-        chatId,
-        [
-          '<b>📊 Platforma statistikasi</b>',
-          '',
-          `👤 Hisoblar: <b>${db.accounts.length}</b>`,
-          `   • reklama beruvchi: ${db.accounts.filter((a) => a.role === 'advertiser').length}`,
-          `   • bloger: ${db.accounts.filter((a) => a.role === 'blogger').length}`,
-          `🔗 Telegramga ulangan: <b>${db.accounts.filter((a) => a.telegramId).length}</b>`,
-          `📢 E‘lonlar: <b>${db.campaigns.length}</b>`,
-          `📨 Arizalar: <b>${db.bids.length}</b>`,
-          `💬 Xabarlar: <b>${db.messages.length}</b>`,
-          `🎫 Ochiq murojaatlar: <b>${db.tickets.filter((t) => t.status === 'open').length}</b>`,
-        ].join('\n'),
-        mainMenu('support'),
-      );
+      await send(chatId, botStatsText(), mainMenu('support'));
       return;
     }
 
@@ -2078,6 +2202,14 @@ let running = false;
 /** Bitta yangilanishni qayta ishlaydi. Webhook ham, polling ham shuni chaqiradi. */
 export async function handleUpdate(update: TgUpdate): Promise<void> {
   try {
+    // Kim qachon foydalanganini yozib boramiz — statistika shundan.
+    const chatId = update.message?.chat.id ?? update.callback_query?.message?.chat.id;
+    const from = update.message?.from ?? update.callback_query?.from;
+    if (typeof chatId === 'number') {
+      touchBotUser(chatId, from);
+      void persist();
+    }
+
     if (update.message) await handleMessage(update.message);
     else if (update.callback_query) await handleCallback(update.callback_query);
   } catch (error) {

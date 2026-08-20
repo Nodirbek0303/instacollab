@@ -298,8 +298,29 @@ marta bosish xabarni takror yubormaydi**.
 
 ### Kim oladi
 
-Telegramga ulangan barcha hisoblar **va** botni ishga tushirgan, lekin hali ro'yxatdan
-o'tmagan odamlar. Muzlatilgan yoki o'chirilgan hisoblarga yuborilmaydi.
+Botga bir marta bo'lsa ham murojaat qilgan **har bir odam** — /start bosgani yetarli,
+ro'yxatdan o'tishi shart emas. Ro'yxat `db.botUsers` da yuritiladi va hech qachon
+tozalanmaydi.
+
+Chetda qoladiganlar: botni bloklaganlar va platformadan chetlatilgan hisoblar.
+
+Botni bloklaganlar birinchi muvaffaqiyatsiz urinishda belgilanadi va **keyingi
+tarqatishlarda ularga umuman urinilmaydi** — bu vaqtni ham, Telegram cheklovini ham
+tejaydi. Agar odam botni qayta ochsa, belgi o'zi olib tashlanadi.
+
+## Bot statistikasi (faqat bot egasi)
+
+Support menyusidagi **«📊 Statistika»** tugmasi. Boshqa hech kimga ko'rinmaydi.
+
+| Bo'lim | Nima ko'rsatiladi |
+| --- | --- |
+| **Foydalanuvchilar** | Jami /start bosganlar; ro'yxatdan o'tganlar; faqat botni ochganlar; bloklaganlar |
+| **Faollik** | Bugun, 7 kun, 30 kun ichida faol bo'lganlar; jami harakatlar soni |
+| **Yangi qo'shilganlar** | Bugun va 7 kun ichida |
+| **Platforma** | Hisoblar (rol va holat bo'yicha), ptichkalilar, e'lonlar, to'lov kutayotganlar, arizalar, bajarilgan zakazlar, xabarlar, obunalar, ochiq shikoyat va murojaatlar |
+
+Har bir xabar va tugma bosishda foydalanuvchining oxirgi faolligi yangilanadi, shuning
+uchun «qancha odam foydalanyapti» degan savolga haqiqiy raqam bilan javob beriladi.
 
 ### Tezlik
 

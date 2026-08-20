@@ -20,6 +20,7 @@ function emptyDatabase(): DatabaseShape {
     supportAdmins: [],
     tickets: [],
     botSessions: [],
+    botUsers: [],
     reports: [],
     adminLog: [],
     follows: [],
