@@ -22,6 +22,8 @@ delete process.env.DATABASE_URL;
 process.env.REQUIRE_APPROVAL = 'false';
 // E'lon to'lovi alohida sinovda (`payment-selftest`) tekshiriladi.
 process.env.CAMPAIGN_PRICE = '0';
+// Ommaviy yuborishda pauza kutib o'tirmaymiz.
+process.env.BROADCAST_DELAY_MS = '0';
 process.env.TELEGRAM_BOT_TOKEN = 'TEST:TOKEN';
 process.env.ADMIN_SETUP_CODE = 'TESTCODE';
 // HTTPS manzil — Mini App tugmalari sinovi uchun.
@@ -35,6 +37,7 @@ interface Sent {
   method: string;
   chatId?: number;
   text?: string;
+  photo?: string;
   payload: Record<string, unknown>;
 }
 
@@ -67,12 +70,14 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
       if (batch.length === 0) await new Promise((r) => setTimeout(r, 20));
       return reply(batch);
     }
+    case 'sendPhoto':
     case 'sendMessage':
     case 'editMessageText': {
       const item = {
         method,
         chatId: payload.chat_id as number,
-        text: payload.text as string,
+        text: (payload.text ?? payload.caption) as string,
+        photo: payload.photo as string | undefined,
         payload,
       };
       sent.push(item);
@@ -109,6 +114,19 @@ function pushContact(phone: string, chatId = CHAT, from = USER): void {
   });
 }
 
+function pushPhoto(fileId: string, caption: string, chatId = CHAT, from = USER): void {
+  queue.push({
+    update_id: updateId++,
+    message: {
+      message_id: updateId,
+      from,
+      chat: { id: chatId },
+      photo: [{ file_id: fileId, width: 800, height: 600 }],
+      caption,
+    },
+  });
+}
+
 function pushCallback(data: string, chatId = CHAT, from = USER): void {
   queue.push({
     update_id: updateId++,
@@ -141,14 +159,19 @@ function allText(chatId = CHAT): string {
 let passed = 0;
 let failed = 0;
 
-function check(name: string, condition: boolean, detail?: string): void {
+function check(name: string, condition: boolean, detail?: unknown): void {
   if (condition) {
     passed += 1;
     console.log(`  ✓ ${name}`);
-  } else {
-    failed += 1;
-    console.log(`  ✗ ${name}${detail ? `\n      ${detail.slice(0, 300)}` : ''}`);
+    return;
   }
+
+  failed += 1;
+  const shown =
+    detail === undefined
+      ? ''
+      : `\n      ${(typeof detail === 'string' ? detail : JSON.stringify(detail)).slice(0, 300)}`;
+  console.log(`  ✗ ${name}${shown}`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -363,6 +386,92 @@ async function main(): Promise<void> {
     // Sinovning qolgan qismi eski tartibda davom etsin.
     delete process.env.ADMIN_PHONES;
     db.supportAdmins = [ADMIN];
+  }
+
+  console.log('\n6c. Ommaviy xabar — hammaga boradi');
+  {
+    const OUTSIDER = 555009;
+    // Begona odam ham botni ishga tushirgan bo'lsin — u ham obunachi.
+    pushMessage('/start', OUTSIDER, { id: OUTSIDER, first_name: 'Begona', username: 'begona9' });
+    await settle();
+
+    sent.length = 0;
+    pushMessage('📣 Hammaga xabar', ADMIN, adminUser);
+    await settle();
+    check('matn so‘raldi', lastText(ADMIN).includes('Hammaga xabar'), lastText(ADMIN));
+    check('qabul qiluvchilar soni aytildi', /\d+ ta<\/b> odamga/.test(lastText(ADMIN)), lastText(ADMIN));
+
+    sent.length = 0;
+    pushMessage('Yangi aksiya: chegirmalar boshlandi!', ADMIN, adminUser);
+    await settle();
+    check('ko‘rib chiqish ko‘rsatildi', lastText(ADMIN).includes('Yuborishdan oldin'), lastText(ADMIN));
+    check(
+      'tasdiqlash tugmasi bor',
+      JSON.stringify(sent.map((i) => i.payload)).includes('bcast:send'),
+      lastText(ADMIN),
+    );
+
+    // Oddiy foydalanuvchi tasdiqlay olmasligi kerak.
+    sent.length = 0;
+    pushCallback('bcast:send');
+    await settle();
+    check(
+      'oddiy foydalanuvchi yubora olmaydi',
+      sent.every((i) => (i.text ?? '').indexOf('Yangi aksiya') === -1),
+      sent.map((i) => i.text).slice(0, 3),
+    );
+
+    sent.length = 0;
+    pushCallback('bcast:send', ADMIN, adminUser);
+    await settle(900);
+
+    const delivered = sent.filter((i) => (i.text ?? '').includes('Yangi aksiya'));
+    const chats = [...new Set(delivered.map((i) => i.chatId))];
+
+    check('xabar tarqatildi', delivered.length > 0, delivered.length);
+    check('ro‘yxatdan o‘tgan foydalanuvchi oldi', chats.includes(CHAT), chats);
+    check('botni ishga tushirgan begona ham oldi', chats.includes(OUTSIDER), chats);
+    check('adminning o‘ziga ham bordi', chats.includes(ADMIN), chats);
+    check('hisobot berildi', allText(ADMIN).includes('Yuborish tugadi'), lastText(ADMIN));
+    check(
+      'yetkazilganlar soni ko‘rsatildi',
+      /Yetkazildi: <b>\d+<\/b>/.test(allText(ADMIN)),
+      lastText(ADMIN),
+    );
+
+    // Tugma ikkinchi marta bosilsa xabar takror ketmasligi kerak.
+    sent.length = 0;
+    pushCallback('bcast:send', ADMIN, adminUser);
+    await settle(400);
+    check(
+      'takroriy bosishda qayta yuborilmadi',
+      sent.every((i) => (i.text ?? '').indexOf('Yangi aksiya') === -1),
+      sent.map((i) => i.text).slice(0, 3),
+    );
+  }
+
+  console.log('\n6d. Rasmli e‘lon ham tarqatiladi');
+  {
+    sent.length = 0;
+    pushMessage('📣 Hammaga xabar', ADMIN, adminUser);
+    await settle();
+
+    pushPhoto('FILE_ID_123', 'Rasmli reklama', ADMIN, adminUser);
+    await settle();
+    check('rasm qabul qilindi', lastText(ADMIN).includes('Rasm + matn'), lastText(ADMIN));
+
+    sent.length = 0;
+    pushCallback('bcast:send', ADMIN, adminUser);
+    await settle(900);
+
+    const photos = sent.filter((i) => i.method === 'sendPhoto');
+    check('rasm sifatida yuborildi', photos.length > 0, photos.length);
+    check('fayl id saqlandi', photos.every((i) => i.photo === 'FILE_ID_123'), photos[0]?.photo);
+    check(
+      'sarlavha bilan bordi',
+      photos.every((i) => (i.text ?? '').includes('Rasmli reklama')),
+      photos[0]?.text,
+    );
   }
 
   console.log('\n7. Parolni unutgan — Telegramga ulangan foydalanuvchi darhol oladi');

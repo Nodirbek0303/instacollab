@@ -62,12 +62,21 @@ interface TgContact {
   user_id?: number;
 }
 
+interface TgPhotoSize {
+  file_id: string;
+  width: number;
+  height: number;
+}
+
 interface TgMessage {
   message_id: number;
   from?: TgUser;
   chat: { id: number };
   text?: string;
   contact?: TgContact;
+  /** Telegram bir nechta o'lchamni yuboradi — eng kattasi oxirgisi. */
+  photo?: TgPhotoSize[];
+  caption?: string;
 }
 
 interface TgCallbackQuery {
@@ -223,6 +232,110 @@ async function setStep(chatId: number, step: string, draft?: Record<string, unkn
 }
 
 /* ------------------------------------------------------------------ */
+/* Ommaviy xabar (faqat admin)                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Xabar boradigan barcha chatlar.
+ *
+ * Ikki manba birlashtiriladi: Telegramga ulangan hisoblar va botni ishga
+ * tushirgan, lekin hali ro'yxatdan o'tmagan odamlar. Ikkinchisi ham
+ * obunachi — u ham e'lonni ko'rishi kerak.
+ *
+ * Bloklangan hisoblarga yuborilmaydi: ular platformadan chetlatilgan.
+ */
+function broadcastAudience(): number[] {
+  const chats = new Set<number>();
+
+  for (const account of db.accounts) {
+    if (account.telegramId == null) continue;
+    if ((account.status ?? 'active') !== 'active') continue;
+    chats.add(account.telegramId);
+  }
+
+  for (const session of db.botSessions) {
+    if (typeof session.chatId === 'number') chats.add(session.chatId);
+  }
+
+  return [...chats];
+}
+
+/** Ommaviy yuborish natijasi. */
+interface BroadcastResult {
+  sent: number;
+  failed: number;
+}
+
+/**
+ * Bitta chatga yuboradi va muvaffaqiyatini qaytaradi.
+ *
+ * `callApi` xatoda `null` qaytaradi, lekin bu yerda sanash kerak: kimga
+ * yetdi, kimga yetmadi. Telegram tezlikni cheklab `429` bersa, aytilgan
+ * vaqt kutiladi va bir marta qayta uriniladi.
+ */
+async function deliver(chatId: number, draft: { text: string; photo?: string }): Promise<boolean> {
+  if (!TOKEN) return false;
+
+  const method = draft.photo ? 'sendPhoto' : 'sendMessage';
+  const payload = draft.photo
+    ? { chat_id: chatId, photo: draft.photo, caption: draft.text, parse_mode: 'HTML' }
+    : { chat_id: chatId, text: draft.text, parse_mode: 'HTML', disable_web_page_preview: true };
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(`https://api.telegram.org/bot${TOKEN}/${method}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = (await response.json()) as {
+        ok: boolean;
+        description?: string;
+        parameters?: { retry_after?: number };
+      };
+
+      if (data.ok) return true;
+
+      const retryAfter = data.parameters?.retry_after;
+      if (retryAfter && attempt === 0) {
+        await new Promise((resolve) => setTimeout(resolve, Math.min(retryAfter, 30) * 1000));
+        continue;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Xabarni hammaga yuboradi.
+ *
+ * Telegram sekundiga ~30 ta xabarga ruxsat beradi, shuning uchun har
+ * yuborishdan keyin kichik pauza qilinadi — aks holda bot vaqtincha
+ * cheklanib qoladi va xabarning bir qismi yetib bormaydi.
+ */
+async function runBroadcast(draft: { text: string; photo?: string }): Promise<BroadcastResult> {
+  const chats = broadcastAudience();
+  let sent = 0;
+  let failed = 0;
+
+  for (const chatId of chats) {
+    const ok = await deliver(chatId, draft);
+    if (ok) sent++;
+    else failed++;
+    await new Promise((resolve) => setTimeout(resolve, BROADCAST_DELAY_MS));
+  }
+
+  return { sent, failed };
+}
+
+/** Yuborishlar orasidagi pauza — Telegram cheklovidan chetda qolish uchun. */
+const BROADCAST_DELAY_MS = Number(process.env.BROADCAST_DELAY_MS ?? 50);
+
+/* ------------------------------------------------------------------ */
 /* Menyular                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -238,6 +351,7 @@ const BTN = {
   tickets: '🎫 Murojaatlar',
   stats: '📊 Statistika',
   resetPassword: '🔑 Parolni tiklash',
+  broadcast: '📣 Hammaga xabar',
   createCampaign: '📣 Reklama joylash',
 } as const;
 
@@ -250,6 +364,7 @@ function mainMenu(role: UserRole | 'support'): Keyboard {
   if (role === 'support') {
     return {
       keyboard: [
+        [{ text: BTN.broadcast }],
         [{ text: BTN.tickets }, { text: BTN.resetPassword }],
         [{ text: BTN.stats }, panel],
       ],
@@ -839,6 +954,45 @@ async function handleStep(message: TgMessage, viewer: Viewer): Promise<boolean> 
   const session = getSession(chatId);
 
   switch (session.step) {
+    case 'bcast:compose': {
+      if (!viewer.isSupport) {
+        await setStep(chatId, 'idle');
+        return true;
+      }
+
+      // Rasm bo'lsa eng kattasini olamiz — sifati yaxshiroq.
+      const photo = message.photo?.[message.photo.length - 1]?.file_id;
+      const body = photo ? (message.caption ?? '').trim() : text;
+
+      if (!photo && body.length < 2) {
+        await send(chatId, '❌ Xabar matnini yozing yoki rasm yuboring.');
+        return true;
+      }
+
+      await setStep(chatId, 'bcast:confirm', { text: body, photo });
+
+      const count = broadcastAudience().length;
+      await send(
+        chatId,
+        [
+          '📣 <b>Yuborishdan oldin tekshiring</b>',
+          '',
+          photo ? '🖼 Rasm + matn:' : '💬 Matn:',
+          '',
+          esc(body) || '<i>(matnsiz, faqat rasm)</i>',
+          '',
+          `Qabul qiluvchilar: <b>${count} ta</b>`,
+        ].join('\n'),
+        {
+          inline_keyboard: [
+            [{ text: `✅ Yuborish (${count})`, callback_data: 'bcast:send' }],
+            [{ text: '❌ Bekor qilish', callback_data: 'bcast:cancel' }],
+          ],
+        },
+      );
+      return true;
+    }
+
     case 'reg:name': {
       if (text.length < 2) {
         await send(chatId, '❌ Kamida 2 ta belgi kiriting.');
@@ -1288,6 +1442,25 @@ async function handleMessage(message: TgMessage): Promise<void> {
       return;
     }
 
+    case BTN.broadcast: {
+      if (!viewer.isSupport) break;
+
+      await setStep(chatId, 'bcast:compose');
+      await send(
+        chatId,
+        [
+          '📣 <b>Hammaga xabar</b>',
+          '',
+          `Xabar hozir <b>${broadcastAudience().length} ta</b> odamga boradi.`,
+          '',
+          'Yuboriladigan matnni yozing. Rasm ham yuborishingiz mumkin — sarlavhasi bilan.',
+          'Bekor qilish uchun /start bosing.',
+        ].join('\n'),
+        { remove_keyboard: true },
+      );
+      return;
+    }
+
     case BTN.stats: {
       if (!viewer.isSupport) break;
       await send(
@@ -1348,6 +1521,53 @@ async function handleCallback(query: TgCallbackQuery): Promise<void> {
   }
 
   /* --- Ro'yxatdan o'tish --- */
+  /* --- Ommaviy xabar --- */
+  if (data === 'bcast:cancel') {
+    await setStep(chatId, 'idle');
+    await answerCallback(query.id, 'Bekor qilindi');
+    await showMainMenu(chatId, viewer);
+    return;
+  }
+
+  if (data === 'bcast:send') {
+    if (!viewer.isSupport) {
+      await answerCallback(query.id, 'Faqat administrator uchun');
+      return;
+    }
+
+    const session = getSession(chatId);
+    const draft = session.draft as { text?: string; photo?: string };
+    if (!draft.text && !draft.photo) {
+      await answerCallback(query.id, 'Xabar topilmadi');
+      await setStep(chatId, 'idle');
+      return;
+    }
+
+    // Holatni darhol tozalaymiz: yuborish davom etayotganda tugma
+    // ikkinchi marta bosilsa xabar takror ketmasligi kerak.
+    await setStep(chatId, 'idle');
+    await answerCallback(query.id, 'Yuborilmoqda…');
+    if (messageId) {
+      await editText(chatId, messageId, '📣 <b>Yuborilmoqda…</b> Bu biroz vaqt olishi mumkin.');
+    }
+
+    const result = await runBroadcast({ text: draft.text ?? '', photo: draft.photo });
+
+    await send(
+      chatId,
+      [
+        '📣 <b>Yuborish tugadi</b>',
+        '',
+        `✅ Yetkazildi: <b>${result.sent}</b>`,
+        result.failed > 0 ? `⚠️ Yetmadi: <b>${result.failed}</b> (botni bloklagan yoki o‘chirgan)` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      mainMenu('support'),
+    );
+    return;
+  }
+
   if (data === 'reg:start') {
     await setStep(chatId, 'idle');
     await send(chatId, '<b>Kim sifatida qo‘shilasiz?</b>', roleKeyboard);

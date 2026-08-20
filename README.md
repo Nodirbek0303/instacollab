@@ -280,6 +280,34 @@ begona odam raqamlarni sinab, kim ro'yxatdan o'tganini bilib olardi.
 `ADMIN_CONTACT` berilmasa, admin hisobining Telegram username'i ishlatiladi; u ham bo'lmasa
 foydalanuvchi botga yo'naltiriladi.
 
+## Ommaviy xabar (faqat admin)
+
+Support menyusidagi **«📣 Hammaga xabar»** tugmasi orqali admin barcha obunachilarga
+xabar yoki reklama yubora oladi.
+
+### Qanday ishlaydi
+
+1. Admin tugmani bosadi — bot nechta odamga borishini darhol aytadi.
+2. Admin matn yozadi **yoki rasm yuboradi** (sarlavhasi bilan).
+3. Bot xabarni ko'rsatib, tasdiqlashni so'raydi: «✅ Yuborish (N)».
+4. Yuborilgach hisobot beriladi: nechtasiga yetkazildi, nechtasiga yetmadi
+   (botni bloklaganlar).
+
+Tasdiqlash tugmasi bosilishi bilan holat tozalanadi, shuning uchun **tugmani ikki
+marta bosish xabarni takror yubormaydi**.
+
+### Kim oladi
+
+Telegramga ulangan barcha hisoblar **va** botni ishga tushirgan, lekin hali ro'yxatdan
+o'tmagan odamlar. Muzlatilgan yoki o'chirilgan hisoblarga yuborilmaydi.
+
+### Tezlik
+
+Telegram sekundiga ~30 ta xabarga ruxsat beradi, shuning uchun har yuborishdan keyin
+kichik pauza qilinadi (`BROADCAST_DELAY_MS`, standart 50 ms). Telegram `429` bilan
+javob bersa aytilgan vaqt kutiladi va bir marta qayta uriniladi — aks holda xabarning
+bir qismi yetib bormay qolardi.
+
 ## Telegram bildirishnomalari — kim nima oladi
 
 Har bir xabar **faqat egasiga** boradi. Quyidagi jadval to'liq ro'yxat:
@@ -503,6 +531,7 @@ uzmasligi uchun har 25 soniyada bo'sh signal yuboriladi. Ilova fondan qaytganda
 | `ADMIN_CONTACT` | To'lov uchun murojaat qilinadigan Telegram username'i |
 | `REQUIRE_APPROVAL` | `false` — yangi hisoblar admin tasdig'ini kutmaydi (standart: kutadi) |
 | `CAMPAIGN_PRICE` | Bitta e'lon joylash narxi so'mda (standart 10 000). `0` — bepul |
+| `BROADCAST_DELAY_MS` | Ommaviy yuborishda xabarlar orasidagi pauza (standart 50) |
 | `DATABASE_URL` | Postgres manzili. Berilsa — ma'lumotlar shu yerda saqlanadi |
 | `BOT_MODE` | `polling` deb yozilsa, HTTPS bo'lsa ham long polling ishlatiladi |
 | `HOST` | Ilova qaysi manzilda tinglaydi (proksi ortida `127.0.0.1`) |
